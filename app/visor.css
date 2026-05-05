@@ -1,0 +1,78 @@
+/* ── Visor mode ──────────────────────────────── */
+#visor-view {
+  position: relative; width: 100%; height: 100%;
+  background: #000;
+  overflow: hidden;
+}
+
+/* Camera layer */
+#visor-camera {
+  position: absolute; inset: 0;
+  z-index: 1;
+}
+#visor-camera video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  transform: scaleX(-1); /* mirror for selfie-like feel */
+}
+
+/* Scanline overlay */
+#visor-view::after {
+  content: '';
+  position: absolute; inset: 0;
+  z-index: 2;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0, 229, 255, 0.03) 2px,
+    rgba(0, 229, 255, 0.03) 4px
+  );
+  pointer-events: none;
+}
+
+/* Lens canvas (bounding boxes) */
+#visor-lens-canvas {
+  position: absolute; inset: 0;
+  z-index: 3;
+  pointer-events: none;
+}
+
+/* Lens chips */
+#visor-lens-chips {
+  position: absolute; top: 0; left: 0; right: 0;
+  z-index: 4;
+  pointer-events: none;
+  padding: 8px;
+}
+.lens-chip {
+  position: absolute;
+  background: rgba(0, 229, 255, 0.85);
+  color: #000;
+  font-size: 10px; font-weight: 700; letter-spacing: 0.5px;
+  padding: 2px 8px; border-radius: 4px;
+  white-space: nowrap;
+  text-transform: uppercase;
+}
+
+/* Tap hint */
+#visor-tap-hint {
+  position: absolute; bottom: 20px; left: 50%; transform: translateX(-50%);
+  z-index: 5;
+  color: var(--mode-color);
+  font-size: 10px; letter-spacing: 2px;
+  text-transform: uppercase;
+  opacity: 0.6;
+  text-shadow: 0 0 10px var(--mode-color);
+  pointer-events: none;
+  transition: opacity 0.3s;
+}
+#visor-tap-hint.flash {
+  opacity: 1;
+  animation: flash-pulse 0.4s ease-out;
+}
+@keyframes flash-pulse {
+  0% { transform: translateX(-50%) scale(1); opacity: 1; }
+  50% { transform: translateX(-50%) scale(1.1); opacity: 0.8; }
+  100% { transform: translateX(-50%) scale(1); opacity: 0.6; }
+}

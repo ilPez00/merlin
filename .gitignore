@@ -11,3 +11,13 @@ desktop/node_modules/
 dist/
 *.log
 .merlin/
+android/merlin-keystore.jks
+android/keystore.properties
+*.apk
+android/.gradle/
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/
+android/capacitor.settings.gradle
+android/local.properties
+
