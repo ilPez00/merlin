@@ -1,114 +1,86 @@
 # Merlin
 
-An always-on AI field intelligence assistant. Your phone becomes a HUD — streaming camera, audio, GPS, and sensors to an AI agent running on your PC that can see what you see, hear what you hear, and access your files.
+[![GitHub release](https://img.shields.io/github/v/release/ilPez00/merlin?color=%2300e5ff&style=flat-square)](https://github.com/ilPez00/merlin/releases/latest)
+[![APK](https://img.shields.io/badge/APK-2.9MB-%2300e5ff?style=flat-square)](https://github.com/ilPez00/merlin/releases/latest/download/merlin.apk)
 
-> Named after the wizard, not the bird (though the bird is also fast).
+An always-on AI field intelligence assistant. Your phone becomes a HUD — streaming camera, audio, GPS, and sensors to an AI agent that can see what you see, hear what you hear, and access your tools.
+
+**Standalone or server-connected.** Just an API key and you're running.
+
+---
+
+## Quick install
+
+### Android (signed APK)
+
+Download the latest APK from [GitHub Releases](https://github.com/ilPez00/merlin/releases/latest):
+
+```bash
+adb install merlin.apk
+```
+
+Or open `merlin.apk` on your phone and enable "Install from unknown sources".
+
+### Desktop / browser
+
+Open `http://localhost:8080/app/` after starting the server, or open `index.html` from any HTTP server.
 
 ---
 
 ## What it does
 
-- **Full-screen phone HUD** with 6 contextual modes (SCOUT, NAV, ANALYZE, LISTEN, QUERY, RECON)
-- **Streams** live camera frames, microphone audio, GPS, and IMU data from phone to PC over WebSocket
-- **Agentic AI** with tool use: reads/writes PC files, runs shell commands, requests phone files on demand
-- **Pluggable backends**: DeepSeek, OpenAI, Claude (Anthropic), or any OpenAI-compatible API
-- **Android APK** built via Capacitor — no app store needed
+### 3 app modes
 
----
-
-## Quick start
-
-### 1. Start the server
-
-```bash
-# Set your API key (DeepSeek example)
-export MERLIN_API_KEY=sk-...
-export MERLIN_BASE_URL=https://api.deepseek.com
-export MERLIN_MODEL=deepseek-chat
-
-./start.sh
-```
-
-This creates a venv, installs dependencies, detects your LAN IP, prints a QR code, and starts both the WebSocket server (`:8765`) and a static file server for the HUD (`:8080`).
-
-### 2. Connect your phone
-
-- Scan the QR code or open `http://<your-ip>:8080` in Chrome on Android
-- Enter the WebSocket URL shown in the terminal and tap **CONNECT**
-- Grant camera, microphone, and location permissions
-
-### 3. (Optional) Install as a native APK
-
-```bash
-./build-apk.sh        # requires Android Studio SDK + Node.js 18+ + Java 17+
-adb install merlin.apk
-```
-
----
-
-## HUD modes
-
-| Mode | Accent | Auto-observe | Purpose |
+| Mode | Platform | What you see | What happens |
 |---|---|---|---|
-| **SCOUT** | cyan | every 15 s | Environmental awareness |
-| **NAV** | green | every 30 s | GPS / location context |
-| **ANALYZE** | amber | tap to trigger | Deep visual analysis |
-| **LISTEN** | purple | every 10 s | Audio transcription |
-| **QUERY** | orange | off | Agent Q&A — ask anything, uses file tools |
-| **RECON** | slate | off | Silent collection, minimal HUD |
+| **Visor** | Phone | Camera passthrough + Google Lens-style object labels | Tap to observe surroundings. AI describes what you're looking at. |
+| **Copilot** | Phone | Your screen shared + AI observation feed | AI watches your screen periodically, offers guidance and suggestions. |
+| **Desktop** | Computer | Screen capture + chat panel | Share your screen, ask questions about what you see. |
 
-In **QUERY** mode you can type a question on the phone or from the PC terminal — the agent will use tools to answer (e.g. read a file, run `git log`, check a directory).
+### 9 activity modes
 
----
+Each mode configures sensors, display widgets, and AI behavior:
 
-## AI backends
+| Mode | Camera | Audio | GPS | Best for |
+|---|---|---|---|---|
+| **WORK** | 0.2 fps | ✓ transcribe | off | Desk work, code, files, meetings |
+| **LIFT** | 1.0 fps | push-to-talk | off | Gym, rep counting, form tips |
+| **WALK** | 0.3 fps | ✓ voice notes | on | Strolling, POI discovery |
+| **TALK** | off | ✓ transcribe | off | Conversations, meetings |
+| **NOTES** | 0.2 fps | ✓ dictate | on | Journaling, capture ideas |
+| **SCOUT** | 0.5 fps | ✓ | on | Environmental awareness |
+| **RECON** | 0.1 fps | off | on | Silent data collection |
+| **DRIVE** | 0.1 fps | voice cmd | high | Navigation, ETA, traffic |
+| **SKI** | 0.5 fps | voice cmd | high | Speed, altitude, trail info |
 
-| Backend | How to select |
+### Offline diary
+
+All observations, voice notes, photos, and conversations are saved locally in IndexedDB. When your PC server appears on the network, entries sync automatically.
+
+### AI backends
+
+| Backend | Setup |
 |---|---|
-| **DeepSeek** (default) | Set `MERLIN_BASE_URL=https://api.deepseek.com` + `MERLIN_MODEL=deepseek-chat` |
-| **OpenAI** | Set `OPENAI_API_KEY`, leave `MERLIN_BASE_URL` unset |
-| **Claude** | Set `ANTHROPIC_API_KEY` (auto-detected) or `MERLIN_BACKEND=anthropic` |
-| **Ollama / local** | Set `MERLIN_BASE_URL=http://localhost:11434/v1` + `MERLIN_MODEL=llava` |
-
----
-
-## Agent tools
-
-When you ask a question in QUERY mode, the AI can:
-
-| Tool | What it does |
-|---|---|
-| `read_file(path)` | Read any file on the PC (up to 64 KB) |
-| `write_file(path, content)` | Create or overwrite a file |
-| `list_dir(path)` | List directory contents |
-| `run_shell(cmd)` | Run a shell command and return output |
-| `read_phone_file(path)` | Ask the phone to send a file (triggers a file picker) |
+| **DeepSeek** (default) | Enter API key in the app |
+| **OpenAI** | Enter API key, select OpenAI |
+| **Anthropic** | Enter API key, select Anthropic |
+| **Custom / local** | Enter base URL + API key |
 
 ---
 
 ## Architecture
 
 ```
-┌─────────────────────────────────────────┐
-│  Phone HUD (Android / Chrome)            │
-│  ┌──────────────────────────────────┐    │
-│  │ Camera  Audio  GPS  IMU          │    │
-│  │ 6 modes: SCOUT NAV ANALYZE …     │    │
-│  └─────────────┬────────────────────┘    │
-└────────────────│────────────────────────┘
-                 │ WebSocket (LAN)
-                 │ frames / audio / JSON
-┌────────────────▼────────────────────────┐
-│  Merlin Server (Python)                  │
-│  stream_processor.py  ←  batches data    │
-│  server.py  ←  stdin REPL               │
-└────────────────┬────────────────────────┘
-                 │
-┌────────────────▼────────────────────────┐
-│  AI Agent (ai/)                          │
-│  session.py → agent.py → tools.py        │
-│  backends: OpenAI-compat / Anthropic     │
-└─────────────────────────────────────────┘
+PHONE (standalone)
+  app/ → API key → DeepSeek / OpenAI / Anthropic
+  ├── offline diary (IndexedDB)
+  └── background sync (when PC server reachable)
+
+PHONE + PC SERVER (full capabilities)
+  app/ → WebSocket → server.py → ai/agent.py → LLM
+                                     ├── read_file / write_file
+                                     ├── run_shell
+                                     └── Praxis MCP (goals, diary, scheduler)
 ```
 
 ---
@@ -117,45 +89,53 @@ When you ask a question in QUERY mode, the AI can:
 
 ```
 merlin/
-  app/                  # Phone HUD (Capacitor web app)
-    index.html          # Full-screen camera shell
-    hud.js              # WebSocket, modes, streaming, rendering
-    hud.css             # --mode-color CSS variable + HUD chrome
+  app/                  # Cross-platform app (PWA + Android APK)
+    index.html          # Entry — setup → picker → mode
+    lib/                # Core engine: config, API, camera, screen, audio,
+    ui/                 # vision (MediaPipe), diary (IndexedDB), sync
+    hud.css / visor.css / copilot.css / desktop.css
 
-  server/
-    server.py           # WebSocket server, stdin REPL
-    stream_processor.py # Sensor batching, query/observe dispatch
-    requirements.txt
+  server/               # PC server (Python)
+    server.py           # WebSocket server + stdin REPL
+    stream_processor.py # Sensor batching, query dispatch
 
-  ai/
-    agent.py            # Agentic tool-use loop
-    tools.py            # read_file, write_file, list_dir, run_shell, read_phone_file
+  ai/                   # Agent system
+    agent.py            # Tool-use loop
+    tools.py            # 15+ tools (read/write files, run shell, Praxis MCP)
     session.py          # Conversation state + backend selection
     system_prompt.txt
-    backends/
-      openai_compat.py
-      anthropic_backend.py
 
-  start.sh              # Server start + QR code
-  build-apk.sh          # Android APK build
-  capacitor.config.json
-  package.json
-  CLAUDE.md             # Developer notes for AI assistants
+  hardware/             # Visor glasses hardware specs
+    firmware/           # ESP32-S3 firmware spec
+    pcb/                # Shield PCB design
+    mechanical/         # 3D-printed frame mount
+    bom/                # Bill of materials (~$50)
+
+  start.sh              # Start PC server
+  build-apk.sh          # Build Android APK
+  VISOR_FUNCTIONS.md    # User-facing spec: activity modes, 7 verbs
+```
+
+---
+
+## Build the APK yourself
+
+Requires: Node.js 18+, Java 17+, Android Studio SDK
+
+```bash
+./build-apk.sh
+adb install merlin.apk
 ```
 
 ---
 
 ## Requirements
 
-**Server (PC)**
+**Phone (standalone)**
+- Android 8+ or any device with Chrome
+- An API key (DeepSeek, OpenAI, or Anthropic)
+
+**Server (full agent)**
 - Python 3.11+
-- An API key for DeepSeek / OpenAI / Anthropic (or a local Ollama instance)
-
-**APK build**
-- Node.js 18+
-- Java 17+
-- Android Studio (for the SDK; `ANDROID_HOME` must be set or auto-detected)
-
-**Phone**
-- Android with Chrome, or the installed Merlin APK
-- Camera, microphone, and location permissions
+- An API key
+- (Optional) Praxis instance for goal scheduling + diary
