@@ -1,0 +1,222 @@
+/* ── Merlin Desktop HUD — style.css ────────────────────────────── */
+
+:root {
+  --hud-font: 'Courier New', 'Lucida Console', monospace;
+  --hud-bg: rgba(0, 0, 0, 0.55);
+  --hud-border: rgba(0, 229, 255, 0.35);
+  --hud-primary: #00e5ff;
+  --hud-text: rgba(255, 255, 255, 0.9);
+  --hud-dim: rgba(255, 255, 255, 0.5);
+  --hud-radius: 6px;
+  --hud-pad: 8px 12px;
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body {
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--hud-font);
+  color: var(--hud-text);
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+#hud-container {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* ── Status bar ────────────────────────────────────────────────── */
+
+#status-bar {
+  position: fixed;
+  top: 4px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  padding: 3px 12px;
+  background: var(--hud-bg);
+  border: 1px solid var(--hud-border);
+  border-radius: 4px;
+  font-size: 10px;
+  letter-spacing: 0.12em;
+  color: var(--hud-dim);
+  pointer-events: none;
+  opacity: 0.5;
+  transition: opacity 0.3s;
+}
+
+#status-bar:hover { opacity: 1; }
+
+#status-shortcut {
+  color: var(--hud-primary);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+  opacity: 0.6;
+}
+
+/* ── Panels ────────────────────────────────────────────────────── */
+
+.hud-panel {
+  position: fixed;
+  z-index: 10;
+  background: var(--hud-bg);
+  border: 1px solid var(--hud-border);
+  border-radius: var(--hud-radius);
+  padding: 0;
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  min-width: 200px;
+  max-width: 600px;
+  overflow: hidden;
+  transition: opacity 0.35s ease, transform 0.35s ease;
+  pointer-events: auto;
+}
+
+.hud-panel.hidden {
+  opacity: 0;
+  transform: translateY(8px);
+  pointer-events: none;
+}
+
+.hud-panel.top-left {
+  top: 36px;
+  left: 12px;
+}
+
+.hud-panel.top-right {
+  top: 36px;
+  right: 12px;
+}
+
+.hud-panel.bottom {
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  max-width: none;
+}
+
+/* ── Panel header ──────────────────────────────────────────────── */
+
+.panel-label {
+  padding: 4px 12px 2px;
+  font-size: 9px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--hud-primary);
+  text-shadow: 0 0 8px var(--hud-primary);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  flex-shrink: 0;
+}
+
+.panel-body {
+  padding: 6px 12px 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--hud-text);
+  white-space: pre-wrap;
+  word-break: break-word;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+/* ── Transcription panel (subtitles) ────────────────────────────── */
+
+#transcription-panel {
+  bottom: 12px;
+  max-width: none;
+  transition: opacity 0.3s ease;
+}
+
+#transcription-panel .panel-label {
+  color: #e040fb;
+  text-shadow: 0 0 8px #e040fb;
+  border-color: rgba(224, 64, 251, 0.2);
+}
+
+#transcription-body {
+  font-size: 14px;
+  line-height: 1.6;
+  min-height: 20px;
+}
+
+/* ── Translation panel ──────────────────────────────────────────── */
+
+#translation-panel {
+  bottom: 120px;
+  max-width: none;
+}
+
+#translation-panel .panel-label {
+  color: #ffab40;
+  text-shadow: 0 0 8px #ffab40;
+  border-color: rgba(255, 171, 64, 0.2);
+}
+
+#translation-body {
+  font-size: 13px;
+  line-height: 1.5;
+  font-style: italic;
+  min-height: 18px;
+}
+
+/* ── Nav panel ──────────────────────────────────────────────────── */
+
+#nav-panel .panel-label {
+  color: #00e676;
+  text-shadow: 0 0 8px #00e676;
+  border-color: rgba(0, 230, 118, 0.2);
+}
+
+#nav-body {
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+/* ── AI panel ───────────────────────────────────────────────────── */
+
+#ai-panel .panel-label {
+  color: #ff6e40;
+  text-shadow: 0 0 8px #ff6e40;
+  border-color: rgba(255, 110, 64, 0.2);
+}
+
+#ai-body {
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+/* ── Scrollbar ──────────────────────────────────────────────────── */
+
+.panel-body::-webkit-scrollbar { width: 3px; }
+.panel-body::-webkit-scrollbar-track { background: transparent; }
+.panel-body::-webkit-scrollbar-thumb {
+  background: var(--hud-primary);
+  border-radius: 2px;
+}
+
+/* ── Dim after inactivity ───────────────────────────────────────── */
+
+.hud-panel.idle {
+  opacity: 0.25;
+  transition: opacity 2s ease;
+}
+
+.hud-panel.idle:hover {
+  opacity: 1;
+  transition: opacity 0.3s ease;
+}
+
+/* ── Connection status colors ───────────────────────────────────── */
+
+#status-text.connected { color: #00e676; }
+#status-text.disconnected { color: #ff5252; }
+#status-text.connecting { color: #ffab40; }

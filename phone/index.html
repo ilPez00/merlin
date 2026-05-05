@@ -1,0 +1,109 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <title>Merlin</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background: #0a0a0a;
+      color: #e0e0e0;
+      font-family: monospace;
+      font-size: 14px;
+      height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+    #viewfinder {
+      width: 100%;
+      flex: 1;
+      object-fit: cover;
+      background: #111;
+      display: block;
+    }
+    #status-bar {
+      background: #111;
+      padding: 8px 12px;
+      display: flex;
+      gap: 16px;
+      align-items: center;
+      flex-wrap: wrap;
+      border-top: 1px solid #222;
+    }
+    .indicator {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: #333;
+    }
+    .dot.active { background: #00e676; }
+    .dot.error  { background: #ff1744; }
+    .dot.warn   { background: #ffab00; }
+    #log {
+      background: #0d0d0d;
+      padding: 6px 12px;
+      font-size: 11px;
+      color: #666;
+      height: 48px;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      justify-content: flex-end;
+    }
+    #controls {
+      display: flex;
+      gap: 8px;
+      padding: 10px 12px;
+      background: #111;
+      border-top: 1px solid #222;
+    }
+    button {
+      flex: 1;
+      padding: 10px;
+      border: 1px solid #333;
+      background: #1a1a1a;
+      color: #e0e0e0;
+      font-family: monospace;
+      font-size: 13px;
+      cursor: pointer;
+      border-radius: 4px;
+    }
+    button:active { background: #2a2a2a; }
+    button.primary { border-color: #00e676; color: #00e676; }
+    button.danger  { border-color: #ff1744; color: #ff1744; }
+  </style>
+</head>
+<body>
+  <video id="viewfinder" autoplay playsinline muted></video>
+
+  <div id="status-bar">
+    <div class="indicator"><div class="dot" id="dot-ws"></div> ws</div>
+    <div class="indicator"><div class="dot" id="dot-cam"></div> cam</div>
+    <div class="indicator"><div class="dot" id="dot-mic"></div> mic</div>
+    <div class="indicator"><div class="dot" id="dot-gps"></div> gps</div>
+    <div class="indicator"><div class="dot" id="dot-imu"></div> imu</div>
+  </div>
+
+  <div id="log">
+    <div id="log-line-1"></div>
+    <div id="log-line-2"></div>
+  </div>
+
+  <div id="controls">
+    <button class="primary" id="btn-connect">connect</button>
+    <button id="btn-cam-flip">flip cam</button>
+    <button class="danger" id="btn-stop" disabled>stop</button>
+  </div>
+
+  <canvas id="capture-canvas" style="display:none"></canvas>
+
+  <script src="merlin.js"></script>
+</body>
+</html>

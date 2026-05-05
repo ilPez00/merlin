@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Merlin HUD</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div id="hud-container">
+    <!-- Navigation panel (top-left) -->
+    <div id="nav-panel" class="hud-panel top-left hidden">
+      <div class="panel-label">🧭 NAV</div>
+      <div class="panel-body" id="nav-body"></div>
+    </div>
+
+    <!-- AI response panel (top-right) -->
+    <div id="ai-panel" class="hud-panel top-right hidden">
+      <div class="panel-label">💬 MERLIN</div>
+      <div class="panel-body" id="ai-body"></div>
+    </div>
+
+    <!-- Transcription subtitles (bottom, full width) -->
+    <div id="transcription-panel" class="hud-panel bottom hidden">
+      <div class="panel-label">🎤 TRANSCRIPTION</div>
+      <div class="panel-body" id="transcription-body"></div>
+    </div>
+
+    <!-- Translation subtitles (bottom, full width, below transcription) -->
+    <div id="translation-panel" class="hud-panel bottom hidden" style="bottom: 140px;">
+      <div class="panel-label">🌐 TRANSLATION</div>
+      <div class="panel-body" id="translation-body"></div>
+    </div>
+
+    <!-- Connection status bar (top-center) -->
+    <div id="status-bar">
+      <span id="status-text">⏳ Connecting...</span>
+      <span id="status-shortcut">Ctrl+Shift+H: interact</span>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>

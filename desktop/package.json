@@ -1,0 +1,15 @@
+{
+  "name": "merlin-hud",
+  "version": "2.0.0",
+  "description": "Merlin Desktop HUD — Transparent overlay for transcriptions, translations, navigation, and AI",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "dependencies": {
+    "electron": "^33.0.0"
+  },
+  "devDependencies": {},
+  "private": true
+}

@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="theme-color" content="#000000">
+  <title>Merlin</title>
+  <link rel="stylesheet" href="hud.css">
+
+  <!-- TensorFlow.js + MoveNet for pose estimation -->
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-core@4.21.0/dist/tf-core.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-converter@4.21.0/dist/tf-converter.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs-backend-webgl@4.21.0/dist/tf-backend-webgl.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/pose-detection@2.1.3/dist/pose-detection.min.js"></script>
+</head>
+<body>
+  <!-- Camera layer (full screen) -->
+  <video id="camera" autoplay playsinline muted></video>
+
+  <!-- Scanline overlay -->
+  <div id="scanlines" aria-hidden="true"></div>
+
+  <!-- Corner bracket decorations -->
+  <div id="corners" aria-hidden="true">
+    <div class="corner tl"></div>
+    <div class="corner tr"></div>
+    <div class="corner bl"></div>
+    <div class="corner br"></div>
+  </div>
+
+  <!-- Panel container — slide-in floating panels -->
+  <div id="panel-container" aria-live="polite"></div>
+
+  <!-- Wake word indicator -->
+  <div id="wake-indicator" aria-hidden="true">LISTENING</div>
+
+  <!-- Status bar (top) -->
+  <div id="status-bar">
+    <span id="status-mode">SCOUT</span>
+    <div id="status-indicators">
+      <span id="ind-ws"  class="indicator" title="WebSocket">WS</span>
+      <span id="ind-cam" class="indicator" title="Camera">CAM</span>
+      <span id="ind-gps" class="indicator" title="GPS">GPS</span>
+      <span id="ind-mic" class="indicator" title="Microphone">MIC</span>
+      <span id="ind-voice" class="indicator" title="Voice wake">VOICE</span>
+    </div>
+    <span id="status-time">--:--</span>
+  </div>
+
+  <!-- Sensor readouts (right edge) -->
+  <div id="sensor-readouts">
+    <div id="readout-gps">GPS: acquiring…</div>
+    <div id="readout-imu">IMU: --</div>
+    <div id="readout-spd">SPD: --</div>
+  </div>
+
+  <!-- Mode tabs bar (bottom) -->
+  <nav id="mode-tabs" aria-label="Modes">
+    <button class="mode-tab active" data-mode="SCOUT">SCOUT</button>
+    <button class="mode-tab" data-mode="NAV">NAV</button>
+    <button class="mode-tab" data-mode="ANALYZE">ANALYZE</button>
+    <button class="mode-tab" data-mode="LISTEN">LISTEN</button>
+    <button class="mode-tab" data-mode="QUERY">QUERY</button>
+    <button class="mode-tab" data-mode="RECON">RECON</button>
+  </nav>
+
+  <!-- Query input bar (visible in QUERY mode) -->
+  <div id="query-bar">
+    <input id="query-input" type="text" autocomplete="off"
+           autocorrect="off" autocapitalize="off" spellcheck="false"
+           placeholder="Ask Merlin…" aria-label="Query input">
+    <button id="query-send" aria-label="Send query">▶</button>
+  </div>
+
+  <!-- Observe tap hint (ANALYZE mode) -->
+  <div id="tap-hint" aria-hidden="true">TAP TO ANALYZE</div>
+
+  <!-- Initial connect overlay -->
+  <div id="connect-overlay">
+    <div id="connect-box">
+      <div id="connect-logo">MERLIN</div>
+      <div id="connect-subtitle">AI Field Intelligence</div>
+      <input id="ws-url" type="url" inputmode="url"
+             placeholder="ws://192.168.1.x:8765"
+             aria-label="WebSocket server URL">
+      <button id="connect-btn">CONNECT</button>
+      <div id="connect-error"></div>
+    </div>
+  </div>
+
+  <!-- File picker (hidden, used for phone file access) -->
+  <input id="file-picker" type="file" style="display:none" aria-hidden="true">
+
+  <script src="hud.js"></script>
+</body>
+</html>

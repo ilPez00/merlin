@@ -1,0 +1,13 @@
+{
+  "appId": "com.merlin.hud",
+  "appName": "Merlin",
+  "webDir": "app",
+  "android": {
+    "allowMixedContent": true
+  },
+  "plugins": {
+    "SplashScreen": {
+      "launchShowDuration": 0
+    }
+  }
+}

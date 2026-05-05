@@ -1,0 +1,17 @@
+{
+  "name": "merlin",
+  "version": "2.0.0",
+  "description": "Merlin AI Field Intelligence HUD",
+  "private": true,
+  "scripts": {
+    "sync": "cap sync",
+    "build-apk": "bash build-apk.sh"
+  },
+  "dependencies": {
+    "@capacitor/android": "^6.0.0",
+    "@capacitor/core": "^6.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^6.0.0"
+  }
+}
