@@ -38,6 +38,7 @@ class MainScreen(Screen):
         ("escape", "quit", "Quit"),
         ("ctrl+t", "mic_test", "Mic test"),
         ("ctrl+l", "show_log", "Show log"),
+        ("ctrl+s", "settings", "Settings"),
     ]
 
     def compose(self):
@@ -72,6 +73,10 @@ class MainScreen(Screen):
     def action_show_log(self):
         cv = self.query_one("#chat-view", ChatView)
         cv.add_message("system", f"Voice status: {self._voice_status}. Watch terminal for merlin.desktop logs.")
+
+    def action_settings(self):
+        from desktop.widgets.settings_screen import SettingsScreen
+        self.app.push_screen(SettingsScreen())
 
     async def _run_mic_test(self):
         cv = self.query_one("#chat-view", ChatView)

@@ -96,6 +96,23 @@ class MerlinTUI(App):
         border: solid #00e5ff;
         width: 40;
     }
+    .settings-dialog {
+        align: center middle;
+        padding: 2;
+        background: #111;
+        border: solid #00e5ff;
+        width: 50;
+        height: 70%;
+    }
+    .settings-title {
+        text-align: center;
+        text-style: bold;
+        color: #00e5ff;
+        padding: 1;
+    }
+    .settings-dialog Input, .settings-dialog Select {
+        margin: 0 0 1 0;
+    }
 
     .sudo-dialog Input {
         margin: 1 0;
