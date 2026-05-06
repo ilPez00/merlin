@@ -70,6 +70,7 @@ class MainScreen(Screen):
         ("ctrl+t", "mic_test", "Mic test"),
         ("ctrl+l", "show_log", "Show log"),
         ("ctrl+s", "settings", "Settings"),
+        ("ctrl+d", "export_dossiers", "Export dossiers"),
     ]
 
     def compose(self):
@@ -91,7 +92,21 @@ class MainScreen(Screen):
         self._setup_widget_refresh()
         # Welcome message
         cv = self.query_one("#chat-view", ChatView)
-        cv.add_message("system", "Merlin listening. Press Ctrl+T to test mic, say wake word to query.")
+        cv.add_message("system", "Merlin listening. Press Ctrl+T to test mic, Ctrl+D to export dossiers, Ctrl+S for settings.")
+        # Initial dossier scan
+        asyncio.create_task(self._initial_dossier_scan())
+
+    async def _initial_dossier_scan(self):
+        """Run dossier LLM update shortly after startup."""
+        await asyncio.sleep(15)
+        from ai.dossiers import dossiers
+        try:
+            updated = await dossiers.update_from_conversations()
+            if updated:
+                cv = self.query_one("#chat-view", ChatView)
+                cv.add_message("system", f"📋 Dossiers built: {len(dossiers.data['people'])} people, {len(dossiers.data['places'])} places")
+        except Exception as e:
+            log.debug("initial dossier scan error: %s", e)
 
     # ── Actions ─────────────────────────────────
 
@@ -108,6 +123,20 @@ class MainScreen(Screen):
     def action_settings(self):
         from desktop.widgets.settings_screen import SettingsScreen
         self.app.push_screen(SettingsScreen())
+
+    def action_export_dossiers(self):
+        """Export dossiers as Markdown to ~/.merlin/dossiers.md and show path."""
+        from ai.dossiers import dossiers
+        try:
+            md = dossiers.export_markdown()
+            path = Path.home() / ".merlin" / "dossiers.md"
+            path.write_text(md, encoding="utf-8")
+            cv = self.query_one("#chat-view", ChatView)
+            cv.add_message("system", f"📄 Dossiers exported to {path}")
+            cv.add_message("system", f"👤 {len(dossiers.data['people'])} people, 📍 {len(dossiers.data['places'])} places, 📅 {len(dossiers.data['events'])} events, ⚡ {len(dossiers.data['activities'])} activities")
+        except Exception as e:
+            cv = self.query_one("#chat-view", ChatView)
+            cv.add_message("system", f"❌ Export error: {e}")
 
     async def _run_mic_test(self):
         cv = self.query_one("#chat-view", ChatView)
