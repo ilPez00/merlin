@@ -44,6 +44,12 @@ class StreamProcessor:
 
     async def on_frame(self, header: dict, payload: bytes):
         self._latest_frame = payload
+        # Share with tools so enroll_face can grab it
+        try:
+            from ai.tools import set_latest_frame
+            set_latest_frame(payload)
+        except Exception:
+            pass
         log.debug("frame received: %d bytes (mode=%s)", len(payload), header.get("mode"))
 
     async def on_audio(self, header: dict, payload: bytes):
@@ -205,8 +211,11 @@ class StreamProcessor:
             detection_text = await self._detect_objects(self._latest_frame)
             if detection_text:
                 parts.append(detection_text)
+            face_text = await self._recognize_faces(self._latest_frame)
+            if face_text:
+                parts.append(face_text)
             # Only send raw frame pixels to LLM in ANALYZE mode;
-            # all other modes use the YOLO text description to save vision tokens.
+            # all other modes use YOLO + face text to save vision tokens.
             if self._current_mode == "ANALYZE":
                 frame_b64 = base64.b64encode(self._latest_frame).decode()
             self._latest_frame = None
@@ -228,6 +237,22 @@ class StreamProcessor:
                 return result.to_context()
         except Exception as e:
             log.debug("YOLO skipped: %s", e)
+        return ""
+
+    # ── Face recognition ──────────────────────────────────────────────────────
+
+    async def _recognize_faces(self, jpeg_bytes: bytes) -> str:
+        try:
+            from vision.face_recognizer import recognize_sync, to_context, list_enrolled
+            if not list_enrolled():
+                return ""  # no enrolled faces — skip entirely
+            loop = asyncio.get_event_loop()
+            results = await loop.run_in_executor(None, recognize_sync, jpeg_bytes)
+            return to_context(results)
+        except RuntimeError:
+            pass  # face_recognition not installed yet
+        except Exception as e:
+            log.debug("face recognition skipped: %s", e)
         return ""
 
     # ── Audio transcription ────────────────────────────────────────────────────

@@ -14,3 +14,5 @@ openai-whisper>=20231117
 ultralytics>=8.3
 chromadb>=0.5
 Pillow>=10.0
+dlib>=20.0
+face_recognition>=1.3

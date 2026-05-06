@@ -24,6 +24,7 @@ log = logging.getLogger("merlin.tools")
 _pending_phone_files: dict[str, asyncio.Future] = {}
 _send_to_phone: Any = None  # coroutine callable set by server at startup
 _latest_gps: dict | None = None  # latest GPS from phone, set via set_latest_gps
+_latest_frame: bytes | None = None  # latest camera frame, set by stream_processor
 
 
 def set_phone_sender(fn):
@@ -36,6 +37,12 @@ def set_latest_gps(gps: dict | None):
     """Set latest GPS coordinates (called by stream_processor)."""
     global _latest_gps
     _latest_gps = gps
+
+
+def set_latest_frame(frame: bytes | None):
+    """Set latest camera JPEG frame (called by stream_processor)."""
+    global _latest_frame
+    _latest_frame = frame
 
 
 def resolve_phone_file(path: str, content: str):
@@ -553,6 +560,48 @@ async def _sudo_run_shell(cmd: str) -> str:
     return await _original_run_shell(cmd)
 
 
+# ── Face recognition tools ────────────────────────────────────────────────────
+
+async def enroll_face(name: str) -> str:
+    """Enroll a person's face using the current camera frame."""
+    if not _latest_frame:
+        return "No camera frame available. Make sure the phone camera is streaming and the person is visible."
+    try:
+        from vision.face_recognizer import enroll_sync, invalidate_cache
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, enroll_sync, name, _latest_frame)
+        invalidate_cache()
+        return result
+    except RuntimeError as e:
+        return f"Error: {e}"
+    except Exception as e:
+        return f"Error enrolling face: {e}"
+
+
+async def forget_face(name: str) -> str:
+    """Remove a person from the face recognition database."""
+    try:
+        from vision.face_recognizer import forget_sync, invalidate_cache
+        loop = asyncio.get_event_loop()
+        result = await loop.run_in_executor(None, forget_sync, name)
+        invalidate_cache()
+        return result
+    except Exception as e:
+        return f"Error: {e}"
+
+
+async def list_known_faces() -> str:
+    """List all people enrolled in the face recognition database."""
+    try:
+        from vision.face_recognizer import list_enrolled
+        names = list_enrolled()
+        if not names:
+            return "No faces enrolled. Use enroll_face(name) while the person is visible on camera."
+        return "Known faces: " + ", ".join(names)
+    except Exception as e:
+        return f"Error: {e}"
+
+
 # ── Memory search tool ────────────────────────────────────────────────────────
 
 async def search_memory(query: str, n: int = 5) -> str:
@@ -766,6 +815,10 @@ TOOL_FUNCTIONS = {
     "log_prep_note":       log_prep_note,
     "conversation_summary": conversation_summary,
     "get_conversation_cue": get_conversation_cue,
+    "enroll_face":          enroll_face,
+    "forget_face":          forget_face,
+    "list_known_faces":     list_known_faces,
+    "search_memory":        search_memory,
 }
 
 TOOL_DEFINITIONS = [
@@ -1094,6 +1147,69 @@ TOOL_DEFINITIONS = [
                     "context": {"type": "string", "description": "What's being discussed right now (topic, name, term)."},
                 },
                 "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "enroll_face",
+            "description": (
+                "Enroll a person's face into the recognition database using the current camera frame. "
+                "Ask the person to look directly at the camera first. "
+                "Call multiple times with different photos to improve accuracy."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Person's name (e.g. 'Alice', 'Dad')."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "forget_face",
+            "description": "Remove a person from the face recognition database.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "name": {"type": "string", "description": "Name of the person to remove."},
+                },
+                "required": ["name"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "list_known_faces",
+            "description": "List all people enrolled in the face recognition database.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_memory",
+            "description": (
+                "Search your persistent episodic memory for relevant past observations, "
+                "conversations, and context. Use when the user asks about something that "
+                "may have happened before the current session."
+            ),
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "What to search for in memory."},
+                    "n":     {"type": "integer", "description": "Max results (default 5)."},
+                },
+                "required": ["query"],
             },
         },
     },

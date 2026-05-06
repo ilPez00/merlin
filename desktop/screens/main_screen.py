@@ -236,7 +236,7 @@ class MainScreen(Screen):
         try:
             duration = 5
             fs = 16000
-            self.call_from_thread(self._log_voice_status, f"🎤 Recording {duration}s...")
+            self._log_voice_status(f"🎤 Recording {duration}s...")
             recording = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype="int16")
             sd.wait()
             self._voice_status = "transcribing"
@@ -245,12 +245,12 @@ class MainScreen(Screen):
             t = Transcriber()
             text = t.transcribe(recording.flatten(), fs)
             if text.strip():
-                self.call_from_thread(self._log_voice_status, f"✅ Transcribed: \"{text.strip()[:80]}\"")
+                self._log_voice_status(f"✅ Transcribed: \"{text.strip()[:80]}\"")
                 await self._handle_query(text.strip())
             else:
-                self.call_from_thread(self._log_voice_status, "❌ No speech detected")
+                self._log_voice_status("❌ No speech detected")
         except Exception as e:
-            self.call_from_thread(self._log_voice_status, f"❌ Voice error: {e}")
+            self._log_voice_status(f"❌ Voice error: {e}")
             log.warning("voice query error: %s", e)
         finally:
             sb.listening = False
@@ -284,14 +284,29 @@ class MainScreen(Screen):
         fs = 16000
 
         try:
-            stream = sd.InputStream(samplerate=fs, channels=1, dtype="int16")
-            stream.start()
+            import threading
+            stream_result = []
+            def try_open():
+                try:
+                    s = sd.InputStream(samplerate=fs, channels=1, dtype="int16")
+                    s.start()
+                    stream_result.append(s)
+                except Exception as e:
+                    stream_result.append(e)
+            t = threading.Thread(target=try_open, daemon=True)
+            t.start()
+            t.join(timeout=3)
+            if not stream_result:
+                raise TimeoutError("sounddevice stream init timed out (no mic?)")
+            if isinstance(stream_result[0], Exception):
+                raise stream_result[0]
+            stream = stream_result[0]
             self._voice_status = "listening"
-            self.call_from_thread(self._log_voice_status, "Voice pipeline active 🎤")
+            log.info("voice pipeline active")
         except Exception as e:
             self._voice_status = f"mic error: {e}"
             log.warning("voice pipeline: mic unavailable: %s", e)
-            self.call_from_thread(self._log_voice_status, f"⚠ Mic error: {e}")
+            self._voice_running = False
             return
 
         block_samples = int(fs * 5)
@@ -327,7 +342,7 @@ class MainScreen(Screen):
                     cmd = parse_voice_command(text)
                     if cmd:
                         action, payload = cmd
-                        self.call_from_thread(self._handle_voice_command, action, payload)
+                        self.app.call_from_thread(self._handle_voice_command, action, payload)
                         continue
 
                     # Wake word check
@@ -338,15 +353,15 @@ class MainScreen(Screen):
                             time.strftime("%Y-%m-%d_%H-%M-%S")
                         )
                         command = wake.strip_wake(text)
-                        self.call_from_thread(self._log_voice_status, f"🔊 Wake word '{match}' detected")
+                        log.info("wake word '%s' detected, command: %s", match, command or "(none)")
                         if command:
                             cmd2 = parse_voice_command(command)
                             if cmd2:
-                                self.call_from_thread(self._handle_voice_command, cmd2[0], cmd2[1])
+                                self.app.call_from_thread(self._handle_voice_command, cmd2[0], cmd2[1])
                             else:
-                                self.call_from_thread(self._handle_query, command)
+                                self.app.call_from_thread(self._handle_query, command)
                         else:
-                            self.call_from_thread(self._handle_query, "yes?")
+                            self.app.call_from_thread(self._handle_query, "yes?")
                         self._voice_status = "listening"
             except Exception as e:
                 log.warning("voice loop error: %s", e)
