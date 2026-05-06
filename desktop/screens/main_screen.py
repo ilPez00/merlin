@@ -35,6 +35,8 @@ class MainScreen(Screen):
     BINDINGS = [
         ("ctrl+c", "quit", "Quit"),
         ("escape", "quit", "Quit"),
+        ("ctrl+t", "mic_test", "Mic test"),
+        ("ctrl+l", "show_log", "Show log"),
     ]
 
     def compose(self):
@@ -47,10 +49,48 @@ class MainScreen(Screen):
         yield Footer()
 
     def on_mount(self):
+        self._voice_status = "starting"
+        self._voice_running = True
+        self._camera_running = True
         self._setup_voice_pipeline()
         self._setup_camera()
         self._setup_cleanup_timer()
         self._setup_widget_refresh()
+        # Welcome message
+        cv = self.query_one("#chat-view", ChatView)
+        cv.add_message("system", "Merlin listening. Press Ctrl+T to test mic, say wake word to query.")
+
+    # ── Actions ─────────────────────────────────
+
+    def action_mic_test(self):
+        """Test microphone: record 3s, transcribe, show result."""
+        cv = self.query_one("#chat-view", ChatView)
+        cv.add_message("system", "🎤 Microphone test: recording 3s...")
+        asyncio.create_task(self._run_mic_test())
+
+    def action_show_log(self):
+        cv = self.query_one("#chat-view", ChatView)
+        cv.add_message("system", f"Voice status: {self._voice_status}. Watch terminal for merlin.desktop logs.")
+
+    async def _run_mic_test(self):
+        cv = self.query_one("#chat-view", ChatView)
+        try:
+            duration = 3
+            fs = 16000
+            cv.add_message("system", f"Recording {duration}s... speak now")
+            rec = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype="int16")
+            sd.wait()
+            cv.add_message("system", f"Captured {len(rec)} samples. Transcribing...")
+
+            from audio.transcriber import Transcriber
+            t = Transcriber()
+            text = t.transcribe(rec.flatten(), fs)
+            if text and text.strip():
+                cv.add_message("system", f"✅ Heard: \"{text.strip()[:120]}\"")
+            else:
+                cv.add_message("system", "❌ No speech detected. Check mic permissions.")
+        except Exception as e:
+            cv.add_message("system", f"❌ Mic test error: {e}")
 
     # ── Message handling ──────────────────────
 
@@ -71,7 +111,12 @@ class MainScreen(Screen):
             from desktop.config import desktop_config
             desktop_config.set("activity_mode", mode_name)
 
-    # ── Voice command handling ────────────────
+    def _log_voice_status(self, msg: str):
+        try:
+            cv = self.query_one("#chat-view", ChatView)
+            cv.add_message("system", msg)
+        except Exception:
+            pass
 
     def _handle_voice_command(self, action: str, payload):
         """Handle parsed voice commands locally without LLM."""
@@ -183,31 +228,44 @@ class MainScreen(Screen):
             await self._handle_query(original_query)
 
     async def _handle_voice_query(self):
-        # Record short audio, transcribe, submit as query
         sb = self.query_one("#status-bar", StatusBar)
         sb.listening = True
+        self._voice_status = "recording"
         self.refresh()
 
         try:
             duration = 5
             fs = 16000
+            self.call_from_thread(self._log_voice_status, f"🎤 Recording {duration}s...")
             recording = sd.rec(int(duration * fs), samplerate=fs, channels=1, dtype="int16")
             sd.wait()
+            self._voice_status = "transcribing"
 
             from audio.transcriber import Transcriber
             t = Transcriber()
             text = t.transcribe(recording.flatten(), fs)
             if text.strip():
+                self.call_from_thread(self._log_voice_status, f"✅ Transcribed: \"{text.strip()[:80]}\"")
                 await self._handle_query(text.strip())
+            else:
+                self.call_from_thread(self._log_voice_status, "❌ No speech detected")
         except Exception as e:
+            self.call_from_thread(self._log_voice_status, f"❌ Voice error: {e}")
             log.warning("voice query error: %s", e)
         finally:
             sb.listening = False
+            self._voice_status = "listening"
 
     # ── Continuous voice pipeline ────────────
 
     def _setup_voice_pipeline(self):
         self._voice_running = True
+        # Show mic status
+        try:
+            cv = self.query_one("#chat-view", ChatView)
+            cv.add_message("system", "Voice pipeline initializing...")
+        except Exception:
+            pass
         self._run_voice_loop()
 
     @work(thread=True)
@@ -228,8 +286,12 @@ class MainScreen(Screen):
         try:
             stream = sd.InputStream(samplerate=fs, channels=1, dtype="int16")
             stream.start()
+            self._voice_status = "listening"
+            self.call_from_thread(self._log_voice_status, "Voice pipeline active 🎤")
         except Exception as e:
+            self._voice_status = f"mic error: {e}"
             log.warning("voice pipeline: mic unavailable: %s", e)
+            self.call_from_thread(self._log_voice_status, f"⚠ Mic error: {e}")
             return
 
         block_samples = int(fs * 5)
@@ -271,10 +333,12 @@ class MainScreen(Screen):
                     # Wake word check
                     match = wake.check(text)
                     if match:
+                        self._voice_status = f"wake: {match}"
                         store.mark_triggered(
                             time.strftime("%Y-%m-%d_%H-%M-%S")
                         )
                         command = wake.strip_wake(text)
+                        self.call_from_thread(self._log_voice_status, f"🔊 Wake word '{match}' detected")
                         if command:
                             cmd2 = parse_voice_command(command)
                             if cmd2:
@@ -283,6 +347,7 @@ class MainScreen(Screen):
                                 self.call_from_thread(self._handle_query, command)
                         else:
                             self.call_from_thread(self._handle_query, "yes?")
+                        self._voice_status = "listening"
             except Exception as e:
                 log.warning("voice loop error: %s", e)
                 continue
