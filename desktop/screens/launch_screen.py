@@ -1,5 +1,5 @@
 from textual.screen import Screen
-from textual.widgets import Header, Footer, Button, Static, Input
+from textual.widgets import Header, Footer, Button, Static, Input, Select
 from textual.containers import Vertical
 from desktop.system.permissions import check_all
 from desktop.config import desktop_config
@@ -15,8 +15,29 @@ class LaunchScreen(Screen):
             yield Static("Checking system capabilities...", id="status-msg")
             yield Static("", id="perm-results")
 
-            # Wake word config (shown once if not set, or always if user wants)
-            yield Static("Wake word:", id="wake-label")
+            # API config
+            yield Static("API Provider:", classes="label")
+            yield Select(
+                [(p, p) for p in ["deepseek", "openai", "anthropic", "custom"]],
+                value=desktop_config.get("provider") or "deepseek",
+                id="provider-select",
+            )
+            yield Static("API Key:", classes="label")
+            yield Input(
+                placeholder="sk-...",
+                id="api-key-input",
+                password=True,
+                value=desktop_config.get("api_key") or "",
+            )
+            yield Static("Custom Base URL (if custom provider):", classes="label")
+            yield Input(
+                placeholder="https://api.example.com/v1",
+                id="base-url-input",
+                value=desktop_config.get("base_url") or "",
+            )
+
+            # Wake word config
+            yield Static("Wake word:", classes="label")
             yield Input(
                 placeholder="e.g. marlin, merlino, computer, jarvis",
                 id="wake-input",
@@ -71,10 +92,24 @@ class LaunchScreen(Screen):
 
     def on_button_pressed(self, event: Button.Pressed):
         if event.button.id == "start-btn":
-            # Save wake words from input
+            # Save API key
+            api_key = self.query_one("#api-key-input", Input).value.strip()
+            provider = self.query_one("#provider-select", Select).value
+            base_url = self.query_one("#base-url-input", Input).value.strip()
+            if api_key:
+                desktop_config.set("api_key", api_key)
+                desktop_config.set("provider", provider)
+                if base_url:
+                    desktop_config.set("base_url", base_url)
+                # Set env var for the AI backend to use
+                import os
+                os.environ["MERLIN_API_KEY"] = api_key
+
+            # Save wake words
             wake_text = self.query_one("#wake-input", Input).value.strip()
             if wake_text:
                 words = [w.strip().lower() for w in wake_text.split(",") if w.strip()]
                 if words:
                     desktop_config.set("wake_words", words)
+
             self.app.push_screen("main")

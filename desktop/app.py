@@ -80,6 +80,15 @@ class MerlinTUI(App):
         height: 3;
     }
 
+    .label {
+        text-style: bold;
+        color: #888;
+        padding: 0 1;
+        margin-top: 1;
+    }
+    Select {
+        margin: 0 1;
+    }
     .sudo-dialog {
         align: center middle;
         padding: 2;

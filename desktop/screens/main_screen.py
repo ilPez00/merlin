@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import os
 import time
 
 from textual.screen import Screen
@@ -177,6 +178,14 @@ class MainScreen(Screen):
         from ai.agent import run as agent_run
         from ai.session import MerlinSession
         from desktop.config import desktop_config
+
+        # Ensure API key is set in env for the backend
+        api_key = desktop_config.get("api_key")
+        if api_key and not os.environ.get("MERLIN_API_KEY"):
+            os.environ["MERLIN_API_KEY"] = api_key
+        if not os.environ.get("MERLIN_API_KEY") and not os.environ.get("OPENAI_API_KEY"):
+            cv.add_message("assistant", "No API key configured. Enter one in settings and restart.", time.strftime("%H:%M:%S"))
+            return
 
         session = MerlinSession()
         await session.start()
