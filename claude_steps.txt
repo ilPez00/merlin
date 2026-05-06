@@ -130,4 +130,46 @@ Modified:
 
 - Sign: Claude
 
+
+SESSION 7: Desktop environment — terminal multiplexer + Merlin copilot (2026-05-06)
+
+Implemented:
+- desktop/terminal/pty.py: PTY manager — openpty, fork shell, async I/O
+- desktop/terminal/emulator.py: pyte-based VT100 terminal emulator with
+  2D cell buffer, ANSI color mapping, plain text extraction
+- desktop/widgets/terminal_pane.py: Textual widget rendering terminal
+  buffer, keyboard input, resize, cursor tracking
+- desktop/widgets/terminal_layout.py: Split pane manager + focus tracking
+- desktop/widgets/suggestion_bar.py: Bottom bar showing one suggestion
+  at a time with Tab/Esc accept/decline
+- desktop/widgets/transcribe_pane.py: Live whisper transcription pane
+- desktop/suggestion.py: Suggestion queue engine + error detection
+  (command not found, npm errors, tracebacks, git/permission errors)
+- desktop/screens/desktop_screen.py: Full desktop environment replacing
+  MainScreen — terminal layout + Merlin HUD sidebar + suggestion bar
+- app.py: Switched from MainScreen to DesktopScreen
+
+Architecture:
+- Center: terminal multiplexer (Alt+H/V split, Alt+W close, Alt+Tab focus)
+- Right: Merlin chat sidebar with HUD (mode, listening, suggestions)
+- Bottom: suggestion bar (one at a time, Tab=accept, Esc=decline)
+- Background transparent, non-essential HUD elements hidden
+- Suggestions auto-detect errors from terminal output and queue fixes
+- !command types into focused terminal
+
+Files created:
+- desktop/terminal/pty.py, emulator.py, __init__.py
+- desktop/widgets/terminal_pane.py, terminal_layout.py
+- desktop/widgets/suggestion_bar.py, transcribe_pane.py
+- desktop/suggestion.py
+- desktop/screens/desktop_screen.py
+
+Modified:
+- desktop/app.py (DesktopScreen replaces MainScreen)
+- desktop/screens/launch_screen.py (pushes "desktop" instead of "main")
+
+- Sign: Claude
+
+- Sign: Claude
+
 - Sign: Claude

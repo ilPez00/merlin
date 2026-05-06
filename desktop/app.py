@@ -12,14 +12,14 @@ from textual.app import App, ComposeResult
 from textual.screen import Screen
 
 from desktop.screens.launch_screen import LaunchScreen
-from desktop.screens.main_screen import MainScreen
+from desktop.screens.desktop_screen import DesktopScreen
 from desktop.config import desktop_config
 
 
 class MerlinTUI(App):
     SCREENS = {
         "launch": LaunchScreen,
-        "main": MainScreen,
+        "desktop": DesktopScreen,
     }
 
     CSS = """
@@ -132,7 +132,7 @@ class MerlinTUI(App):
 
         # Skip launch screen if API key is already saved
         if api_key:
-            self.push_screen("main")
+            self.push_screen("desktop")
         else:
             self.push_screen("launch")
 

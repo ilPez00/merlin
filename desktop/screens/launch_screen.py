@@ -112,4 +112,4 @@ class LaunchScreen(Screen):
                 if words:
                     desktop_config.set("wake_words", words)
 
-            self.app.push_screen("main")
+            self.app.push_screen("desktop")
