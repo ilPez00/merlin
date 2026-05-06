@@ -104,3 +104,30 @@ New/updated files:
 - desktop/screens/main_screen.py — safe widget access in voice loop
 
 - Sign: Claude
+
+
+SESSION 6: Frame relevance, power levels, caveman mode (2026-05-06)
+
+Implemented:
+- ai/frames.py: frame relevance system — saves JPEG + metadata, scores by
+  tap/mentions/dossier matches/keywords, prunes to top N, marks favorites
+- ai/powers.py: power level engine — social/economic/aesthetic/intellectual
+  estimates, adaptive (confidence grows with each observation), caveman bar display
+- ai/tools.py: 43 tools — added search_frames() and estimate_power_level()
+- ai/system_prompt.txt: caveman mode rules — minimal tokens by default,
+  full eloquence only for genuine human connection. No greetings, no farewells.
+- desktop/screens/main_screen.py: auto-save webcam frames every 10 captures
+- TOOL_DEFINITIONS: JSON defs for search_frames + estimate_power_level
+
+New files:
+- ai/frames.py
+- ai/powers.py
+
+Modified:
+- ai/tools.py (+2 tools, 43 total)
+- ai/system_prompt.txt (caveman mode rules)
+- desktop/screens/main_screen.py (frame auto-save)
+
+- Sign: Claude
+
+- Sign: Claude

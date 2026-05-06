@@ -502,6 +502,34 @@ async def capture_webcam() -> str:
     return "No webcam frame available. The webcam may not be active."
 
 
+async def search_frames(query: str, n: int = 5) -> str:
+    """Search saved visual memories (frames) by keyword. Returns matching frames with their AI descriptions."""
+    from ai.frames import frames
+    results = frames.search(query, max_results=n)
+    if not results:
+        return "No matching frames found."
+    lines = [f"Found {len(results)} matching frame(s):"]
+    for r in results:
+        ts = time.strftime("%Y-%m-%d %H:%M", time.localtime(r.get("timestamp", 0)))
+        text = (r.get("ai_text", "") or "")[:120]
+        kw = ", ".join(r.get("keywords", [])[:5])
+        lines.append(f"\n📸 [{ts}] ({r.get('mode', '?')}) score={r.get('score', 0):.0f}")
+        if text:
+            lines.append(f"   {text}")
+        if kw:
+            lines.append(f"   tags: {kw}")
+    return "\n".join(lines)
+
+
+async def estimate_power_level(person_name: str, visual_cues: str = "") -> str:
+    """Estimate a person's power levels (social, economic, aesthetic, intellectual) based on visual cues and past observations."""
+    from ai.powers import power_engine
+    if visual_cues:
+        cues = power_engine.extract_cues_from_ai_text(visual_cues)
+        power_engine.update(person_name, cues)
+    return power_engine.summarize(person_name)
+
+
 async def speak(text: str) -> str:
     """Speak the given text aloud using text-to-speech. The user hears this through their speakers."""
     try:
@@ -866,6 +894,8 @@ TOOL_FUNCTIONS = {
     "memory_search":       memory_search,
     "memory_save":         memory_save,
     "capture_webcam":      capture_webcam,
+    "search_frames":       search_frames,
+    "estimate_power_level": estimate_power_level,
     "speak":               speak,
     "log_sleep":           log_sleep,
     "log_expense":         log_expense,
@@ -1397,6 +1427,36 @@ TOOL_DEFINITIONS = [
                     "value": {"type": "string", "description": "Value. For 'triggers', use comma-separated list."},
                 },
                 "required": ["field", "value"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "search_frames",
+            "description": "Search saved visual memories (frames) by keyword. Returns matching frames with their AI descriptions, scores, and timestamps.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "query": {"type": "string", "description": "Search keyword (e.g. 'apple', 'document', 'person', 'place')."},
+                    "n":     {"type": "integer", "description": "Max results (default 5)."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "estimate_power_level",
+            "description": "Estimate a person's power levels (social, economic, aesthetic, intellectual) from visual cues. Updates and adapts over time.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "person_name": {"type": "string", "description": "Name of the person to estimate."},
+                    "visual_cues": {"type": "string", "description": "Visual observation text (e.g. 'well dressed, expensive watch, bookshelf behind')."},
+                },
+                "required": ["person_name"],
             },
         },
     },

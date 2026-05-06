@@ -496,6 +496,16 @@ class MainScreen(Screen):
                 self._last_frame_b64 = b64
                 from ai.tools import set_webcam_frame
                 set_webcam_frame(b64)
+                # Save frame to visual memory every 10th capture
+                if not hasattr(self, "_frame_counter"):
+                    self._frame_counter = 0
+                self._frame_counter += 1
+                if self._frame_counter % 10 == 0:
+                    try:
+                        from ai.frames import frames
+                        frames.save_from_bytes(buf.tobytes(), mode=desktop_config.get("activity_mode", "SCOUT"))
+                    except Exception:
+                        pass
             import time as _time
             _time.sleep(2)
 
