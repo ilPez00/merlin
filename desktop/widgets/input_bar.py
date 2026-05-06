@@ -1,5 +1,6 @@
 from textual.widgets import Input, Button
 from textual.containers import Horizontal
+from textual.message import Message
 
 
 class InputBar(Horizontal):
@@ -18,9 +19,10 @@ class InputBar(Horizontal):
         self.post_message(self.QuerySubmitted(event.value))
         event.input.value = ""
 
-    class MicPressed:
+    class MicPressed(Message):
         pass
 
-    class QuerySubmitted:
+    class QuerySubmitted(Message):
         def __init__(self, text: str):
+            super().__init__()
             self.text = text

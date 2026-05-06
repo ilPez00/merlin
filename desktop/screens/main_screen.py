@@ -233,6 +233,15 @@ class MainScreen(Screen):
             return
 
         block_samples = int(fs * 5)
+        # Wait for widgets to be mounted before accessing them
+        import time as _time
+        _time.sleep(1)
+        try:
+            lp = self.query_one("#left-panel", LeftPanel)
+            lp_ref = lp
+        except Exception:
+            lp_ref = None
+
         while self._voice_running:
             try:
                 chunk, _ = stream.read(block_samples)
@@ -244,12 +253,15 @@ class MainScreen(Screen):
                 if text:
                     store.save_transcript(time.time(), text, audio_tail.tobytes())
 
-                    lp = self.query_one("#left-panel", LeftPanel)
-                    lp.last_heard = text[:60]
-                    lp.buffer_pct = ring.fill_ratio
-                    self.refresh()
+                    if lp_ref:
+                        try:
+                            lp_ref.last_heard = text[:60]
+                            lp_ref.buffer_pct = ring.fill_ratio
+                            self.refresh()
+                        except Exception:
+                            pass
 
-                    # Voice command check (runs before wake word for local actions)
+                    # Voice command check
                     cmd = parse_voice_command(text)
                     if cmd:
                         action, payload = cmd
@@ -264,7 +276,6 @@ class MainScreen(Screen):
                         )
                         command = wake.strip_wake(text)
                         if command:
-                            # Parse for local commands first
                             cmd2 = parse_voice_command(command)
                             if cmd2:
                                 self.call_from_thread(self._handle_voice_command, cmd2[0], cmd2[1])
