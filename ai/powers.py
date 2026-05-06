@@ -91,23 +91,16 @@ class PowerLevelEngine:
         return current
 
     def summarize(self, person_name: str) -> str:
-        """Return a short caveman-mode power level summary."""
+        """Return a compressed caveman-mode power level summary."""
         pl = self.get(person_name)
         if pl["social"]["observations"] == 0:
             return f"{person_name}: unknown"
 
-        def bar(val):
-            n = max(0, min(10, int(round(val / 10))))
-            return "█" * n + "░" * (10 - n)
-
-        lines = [
-            f"{person_name}:",
-            f"  S {bar(pl['social']['value'])} ({pl['social']['value']:.0f})",
-            f"  Ec {bar(pl['economic']['value'])} ({pl['economic']['value']:.0f})",
-            f"  A {bar(pl['aesthetic']['value'])} ({pl['aesthetic']['value']:.0f})",
-            f"  I {bar(pl['intellectual']['value'])} ({pl['intellectual']['value']:.0f})",
-        ]
-        return "\n".join(lines)
+        s = pl['social']['value']
+        ec = pl['economic']['value']
+        a = pl['aesthetic']['value']
+        i = pl['intellectual']['value']
+        return f"{person_name}: S{s:.0f} Ec{ec:.0f} A{a:.0f} I{i:.0f}"
 
     def extract_cues_from_ai_text(self, ai_text: str) -> dict:
         """Parse AI observation text for power level cues.
