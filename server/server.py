@@ -196,9 +196,45 @@ async def stdin_repl(session: MerlinSession):
 
 # ── Main ──────────────────────────────────────────────────────────────────────
 
+async def _mic_command(session: MerlinSession, text: str):
+    """Called by MicListener when a wake-word command is heard on the PC mic."""
+    log.info("PC mic command: %s", text)
+    try:
+        response = await session.query(text, mode="QUERY")
+        await broadcast({"type": "response", "text": response, "mode": "QUERY"})
+        # Speak the response aloud
+        try:
+            from audio.tts import speak
+            asyncio.create_task(speak(response))
+        except Exception as e:
+            log.debug("TTS skipped: %s", e)
+    except Exception as e:
+        log.error("mic command error: %s", e)
+
+
 async def main():
     session = MerlinSession()
     await session.start()
+
+    # ── PC microphone listener (wake word → voice command) ────────────────────
+    mic_enabled = os.environ.get("MERLIN_MIC", "1") != "0"
+    mic_listener = None
+    if mic_enabled:
+        try:
+            from audio.mic import MicListener
+            from audio.wake import WakeWordDetector
+            import ast, os as _os
+            words_env = _os.environ.get("MERLIN_WAKE_WORDS", "")
+            wake_words = ast.literal_eval(words_env) if words_env else None
+
+            async def _on_command(text: str):
+                await _mic_command(session, text)
+
+            mic_listener = MicListener(on_command=_on_command, wake_words=wake_words)
+            mic_listener.start(asyncio.get_event_loop())
+            log.info("PC mic listener active (set MERLIN_MIC=0 to disable)")
+        except Exception as e:
+            log.warning("mic listener not started: %s", e)
 
     async def handler(ws):
         client = ClientHandler(ws, session)
@@ -213,6 +249,8 @@ async def main():
         finally:
             repl_task.cancel()
             await asyncio.gather(repl_task, return_exceptions=True)
+            if mic_listener:
+                mic_listener.stop()
 
 
 if __name__ == "__main__":

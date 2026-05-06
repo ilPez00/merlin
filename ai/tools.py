@@ -7,6 +7,7 @@ phone filesystem, and the user's lifestyle data (exercises, food, places, goals)
 import asyncio
 import json
 import logging
+import math
 import os
 import shlex
 import subprocess
@@ -312,7 +313,12 @@ async def find_places(query: str) -> str:
             return f"No places found matching '{query}' near your location."
         lines = [f"Nearby {query}:"]
         for r in results:
-            dist_m = ((float(r["lat"]) - lat) ** 2 + (float(r["lon"]) - lon) ** 2) ** 0.5 * 111000
+            rlat, rlon = float(r["lat"]), float(r["lon"])
+            dlat = math.radians(rlat - lat)
+            dlon = math.radians(rlon - lon)
+            a = (math.sin(dlat / 2) ** 2
+                 + math.cos(math.radians(lat)) * math.cos(math.radians(rlat)) * math.sin(dlon / 2) ** 2)
+            dist_m = 6_371_000 * 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
             label = r.get("display_name", r.get("name", "unknown"))
             lines.append(f"  {label} ({dist_m:.0f}m away)")
         return "\n".join(lines)
@@ -466,24 +472,300 @@ async def get_navigation(destination_lat: float, destination_lon: float) -> str:
         return f"Error getting navigation: {e}"
 
 
+# ── Desktop-specific tools ────────────────────────────────────────────────────
+
+_latest_webcam_b64: str | None = None
+_latest_sudo_password: str | None = None
+
+
+def set_webcam_frame(b64: str | None):
+    global _latest_webcam_b64
+    _latest_webcam_b64 = b64
+
+
+def set_sudo_password(pw: str | None):
+    global _latest_sudo_password
+    _latest_sudo_password = pw
+
+
+async def capture_webcam() -> str:
+    """Capture the current webcam frame and return it as a base64 JPEG, or a status message."""
+    if _latest_webcam_b64:
+        return f"data:image/jpeg;base64,{_latest_webcam_b64}"
+    return "No webcam frame available. The webcam may not be active."
+
+
+async def speak(text: str) -> str:
+    """Speak the given text aloud using text-to-speech. The user hears this through their speakers."""
+    try:
+        import edge_tts
+        import subprocess
+        from pathlib import Path
+
+        voice = "en-US-JennyNeural"
+        tts = edge_tts.Communicate(str(text)[:500], voice)
+        await tts.save("/tmp/merlin_tts.mp3")
+        subprocess.Popen(
+            ["ffplay", "-nodisp", "-autoexit", "/tmp/merlin_tts.mp3"],
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        return f"Spoken: {text[:100]}..."
+    except ImportError:
+        return "Error: edge-tts not installed"
+    except Exception as e:
+        return f"Error speaking: {e}"
+
+
+# ── Modify run_shell to support sudo ──────────────────────────────────────────
+
+_original_run_shell = run_shell
+
+
+async def _sudo_run_shell(cmd: str) -> str:
+    """Extended run_shell with sudo support via per-command password prompt."""
+    if cmd.strip().startswith("sudo ") and _latest_sudo_password:
+        import asyncio, subprocess
+        full_cmd = f"sudo -S {cmd[5:]}"
+        try:
+            result = await asyncio.create_subprocess_shell(
+                full_cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+            )
+            stdout, stderr = await asyncio.wait_for(
+                result.communicate(input=(_latest_sudo_password + "\n").encode()),
+                timeout=60,
+            )
+            out = stdout.decode("utf-8", errors="replace").strip()
+            err = stderr.decode("utf-8", errors="replace").strip()
+            parts = []
+            if out: parts.append(out)
+            if err: parts.append(f"[stderr]\n{err}")
+            return "\n".join(parts) if parts else f"(exit {result.returncode}, no output)"
+        except asyncio.TimeoutError:
+            return "Error: command timed out after 60 seconds"
+        except Exception as e:
+            return f"Error running command: {e}"
+    elif cmd.strip().startswith("sudo "):
+        return "Error: sudo password not provided. Prompt the user to speak or type their sudo password."
+    return await _original_run_shell(cmd)
+
+
+# ── Memory search tool ────────────────────────────────────────────────────────
+
+async def search_memory(query: str, n: int = 5) -> str:
+    """Search episodic memory for relevant past observations and Q&A."""
+    try:
+        from .memory import get_memory
+        results = get_memory().query(query, n=n)
+        if not results:
+            return "No relevant memories found."
+        return "\n\n".join(results)
+    except Exception as e:
+        return f"Memory search error: {e}"
+
+
+# ── Lifestyle tools: tiredness, expense, sleep, todos ──────────────────────────
+
+async def log_sleep(hours: float, quality: str = "good") -> str:
+    """Log sleep hours and quality rating."""
+    from ai.widgets import set as wset
+    wset("sleep_hours", hours)
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "date": _today(),
+        "hours": hours,
+        "quality": quality,
+    }
+    data = _read_json("sleep_log.json")
+    if not isinstance(data, list): data = []
+    data.append(entry)
+    _write_json("sleep_log.json", data)
+    return f"Logged {hours}h of sleep (quality: {quality})"
+
+
+async def log_expense(amount: float, category: str = "other", note: str = "") -> str:
+    """Log a money expense. Updates today's total spent."""
+    from ai.widgets import set as wset
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "date": _today(),
+        "amount": amount,
+        "category": category.strip().lower(),
+        "note": note.strip(),
+    }
+    data = _read_json("expenses.json")
+    if not isinstance(data, list): data = []
+    data.append(entry)
+    _write_json("expenses.json", data)
+
+    # Update runtime total
+    today_total = sum(
+        e.get("amount", 0) for e in data
+        if isinstance(e, dict) and e.get("date") == _today()
+    )
+    wset("money_spent", today_total)
+    return f"Logged €{amount:.2f} ({category}). Today total: €{today_total:.2f}"
+
+
+async def get_tiredness() -> str:
+    """Estimate the user's current tiredness level based on wake time, steps, sleep, and activity."""
+    from ai.widgets import estimate_tiredness, tiredness_label
+    pct = estimate_tiredness()
+    label = tiredness_label(pct)
+    return f"Tiredness: {pct}% ({label})"
+
+
+async def get_todo_list() -> str:
+    """List the user's todo items."""
+    data = _read_json("todos.json")
+    if not isinstance(data, list) or not data:
+        return "No todos."
+    lines = []
+    for i, t in enumerate(data, 1):
+        status = "✓" if t.get("done") else "○"
+        lines.append(f"{i}. {status} {t.get('text', '')}")
+    return "\n".join(lines)
+
+
+async def add_todo(text: str, priority: str = "medium") -> str:
+    """Add a todo item."""
+    from ai.widgets import set as wset
+    data = _read_json("todos.json")
+    if not isinstance(data, list): data = []
+    entry = {
+        "id": str(len(data) + 1),
+        "text": text.strip(),
+        "done": False,
+        "priority": priority,
+        "created": datetime.now().isoformat(),
+    }
+    data.append(entry)
+    _write_json("todos.json", data)
+    wset("todos", data)
+    return f"Added: {text}"
+
+
+async def complete_todo(item_id: str) -> str:
+    """Mark a todo item as complete by ID or number."""
+    from ai.widgets import set as wset
+    data = _read_json("todos.json")
+    if not isinstance(data, list): return "No todos found."
+    for t in data:
+        if t.get("id") == item_id or str(t.get("id")) == item_id:
+            t["done"] = True
+            t["completed_at"] = datetime.now().isoformat()
+            _write_json("todos.json", data)
+            wset("todos", data)
+            return f"Completed: {t.get('text', '')}"
+    return f"Todo '{item_id}' not found."
+
+
+# ── Conversate-style tools (Prep Notes, AI Summary, AI Cues) ──────────────────
+
+async def log_prep_note(text: str, topic: str = "") -> str:
+    """Save a preparation note for an upcoming conversation. The AI will use this as context during the next TALK mode session."""
+    entry = {
+        "timestamp": datetime.now().isoformat(),
+        "topic": topic.strip() or "general",
+        "text": text.strip(),
+    }
+    data = _read_json("prep_notes.json")
+    if not isinstance(data, list): data = []
+    data.append(entry)
+    _write_json("prep_notes.json", data)
+    return f"Prep note saved (topic: {topic or 'general'}). I'll reference this in your next conversation."
+
+
+async def conversation_summary() -> str:
+    """Generate a summary of the most recent conversation from the diary. Returns key points and action items."""
+    recent = _read_json("conversations.json") if False else []
+    # Fallback: return recent prep notes and diary entries
+    prep = _read_json("prep_notes.json")[-3:] if _read_json("prep_notes.json") else []
+    lines = ["No recent conversation data available."]
+    if prep:
+        lines.append("Recent prep notes:")
+        for p in prep:
+            lines.append(f"  - {p.get('text', '')[:100]}")
+    return "\n".join(lines)
+
+
+async def get_conversation_cue(context: str = "") -> str:
+    """Get a real-time conversation cue — a suggestion, answer, concept explanation, or bio reference based on what's being discussed."""
+    if context:
+        return f"Conversation cue for '{context}' would appear here. The AI will use this context in the conversation."
+    return "No context provided for a cue."
+
+
+# ── Memory tools (ChromaDB stubs for future) ─────────────────────────────────
+
+_memory_store: list[dict] = []
+
+
+async def memory_search(query: str, n: int = 5) -> str:
+    """Search stored memories by text query."""
+    if not _memory_store:
+        return "No memories stored yet."
+    # Simple keyword fallback until ChromaDB is wired
+    results = [m for m in _memory_store if query.lower() in m.get("text", "").lower()]
+    if not results:
+        return "No matching memories found."
+    lines = []
+    for m in results[:n]:
+        lines.append(f"- {m.get('text', '')} ({m.get('timestamp', '')})")
+    return "\n".join(lines)
+
+
+async def memory_save(text: str, tags: str = "", importance: int = 1) -> str:
+    """Save a memory for long-term recall."""
+    entry = {
+        "text": text.strip(),
+        "tags": tags.strip().split(",") if tags else [],
+        "importance": importance,
+        "timestamp": datetime.now().isoformat(),
+    }
+    _memory_store.append(entry)
+    # Also persist to disk
+    data = _read_json("memories.json")
+    if not isinstance(data, list): data = []
+    data.append(entry)
+    _write_json("memories.json", data)
+    return f"Saved memory: {text[:60]}..."
+
+
 # ── Tool registry ─────────────────────────────────────────────────────────────
 
 TOOL_FUNCTIONS = {
-    "read_file":       read_file,
-    "write_file":      write_file,
-    "list_dir":        list_dir,
-    "run_shell":       run_shell,
-    "read_phone_file": read_phone_file,
-    "log_exercise":    log_exercise,
-    "log_food":        log_food,
-    "get_user_pref":   get_user_pref,
-    "set_user_pref":   set_user_pref,
-    "find_places":     find_places,
-    "bookmark_place":  bookmark_place,
-    "check_goals":     check_goals,
-    "capture_screen":  capture_screen,
-    "translate_text":  translate_text,
-    "get_navigation":  get_navigation,
+    "read_file":           read_file,
+    "write_file":          write_file,
+    "list_dir":            list_dir,
+    "run_shell":           _sudo_run_shell,
+    "read_phone_file":     read_phone_file,
+    "log_exercise":        log_exercise,
+    "log_food":            log_food,
+    "get_user_pref":       get_user_pref,
+    "set_user_pref":       set_user_pref,
+    "find_places":         find_places,
+    "bookmark_place":      bookmark_place,
+    "check_goals":         check_goals,
+    "capture_screen":      capture_screen,
+    "translate_text":      translate_text,
+    "get_navigation":      get_navigation,
+    "memory_search":       memory_search,
+    "memory_save":         memory_save,
+    "capture_webcam":      capture_webcam,
+    "speak":               speak,
+    "log_sleep":           log_sleep,
+    "log_expense":         log_expense,
+    "get_tiredness":       get_tiredness,
+    "get_todo_list":       get_todo_list,
+    "add_todo":            add_todo,
+    "complete_todo":       complete_todo,
+    "log_prep_note":       log_prep_note,
+    "conversation_summary": conversation_summary,
+    "get_conversation_cue": get_conversation_cue,
 }
 
 TOOL_DEFINITIONS = [
@@ -678,13 +960,83 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
-            "name": "translate_text",
-            "description": "Translate text to a target language. Useful for real-time conversation translation.",
+            "name": "memory_search",
+            "description": "Search stored memories by text query. Returns matching memories with similarity scores.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "text": {"type": "string", "description": "Text to translate."},
-                    "target_lang": {"type": "string", "description": "Target language code (e.g. 'en', 'it', 'fr', 'es', 'de', 'ja', 'zh'). Default: 'en'."},
+                    "query": {"type": "string", "description": "What to search for in memory."},
+                    "n":     {"type": "integer", "description": "Max results to return (default 5)."},
+                },
+                "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "log_sleep",
+            "description": "Log sleep hours and quality. Updates tiredness estimation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "hours":   {"type": "number", "description": "Hours slept."},
+                    "quality": {"type": "string", "description": "Sleep quality: 'good', 'fair', 'poor'."},
+                },
+                "required": ["hours"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "log_expense",
+            "description": "Log a money expense. Categorizes and tracks daily spending total.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "amount":   {"type": "number", "description": "Amount spent in EUR."},
+                    "category": {"type": "string", "description": "Category: 'food', 'transport', 'shopping', 'bills', 'entertainment', 'other'."},
+                    "note":     {"type": "string", "description": "Optional note about the expense."},
+                },
+                "required": ["amount"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_tiredness",
+            "description": "Estimate the user's current tiredness level (0-100%) based on wake time, steps, sleep, and activity.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_todo_list",
+            "description": "List all todo items. Returns pending and completed tasks.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_todo",
+            "description": "Add a new todo item.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text":     {"type": "string", "description": "The todo text."},
+                    "priority": {"type": "string", "description": "'low', 'medium', or 'high'."},
                 },
                 "required": ["text"],
             },
@@ -693,15 +1045,55 @@ TOOL_DEFINITIONS = [
     {
         "type": "function",
         "function": {
-            "name": "get_navigation",
-            "description": "Get turn-by-turn driving directions from current GPS location to a destination.",
+            "name": "complete_todo",
+            "description": "Mark a todo item as complete by its ID or number.",
             "parameters": {
                 "type": "object",
                 "properties": {
-                    "destination_lat": {"type": "number", "description": "Destination latitude."},
-                    "destination_lon": {"type": "number", "description": "Destination longitude."},
+                    "item_id": {"type": "string", "description": "Todo ID or number (e.g. '1' for the first todo)."},
                 },
-                "required": ["destination_lat", "destination_lon"],
+                "required": ["item_id"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "log_prep_note",
+            "description": "Save a preparation note for an upcoming conversation. The AI will reference this during the next conversation.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "text":  {"type": "string", "description": "The note content."},
+                    "topic": {"type": "string", "description": "Topic or context (e.g. 'job interview', 'meeting with client')."},
+                },
+                "required": ["text"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "conversation_summary",
+            "description": "Generate an AI summary of the most recent conversation with key points and action items.",
+            "parameters": {
+                "type": "object",
+                "properties": {},
+                "required": [],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "get_conversation_cue",
+            "description": "Get a real-time conversation cue — a suggestion, answer, concept explanation, or bio reference.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "context": {"type": "string", "description": "What's being discussed right now (topic, name, term)."},
+                },
+                "required": [],
             },
         },
     },

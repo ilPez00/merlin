@@ -132,6 +132,11 @@ class StreamProcessor:
         try:
             response = await self.session.query(text, mode=mode)
             await self._send({"type": "response", "text": response, "mode": mode})
+            try:
+                from audio.tts import speak
+                asyncio.create_task(speak(response))
+            except Exception:
+                pass
         except Exception as e:
             log.error("query handler error: %s", e)
             await self._send({"type": "response", "text": f"Error: {e}", "mode": mode})
@@ -197,7 +202,13 @@ class StreamProcessor:
 
         frame_b64 = None
         if self._latest_frame:
-            frame_b64 = base64.b64encode(self._latest_frame).decode()
+            detection_text = await self._detect_objects(self._latest_frame)
+            if detection_text:
+                parts.append(detection_text)
+            # Only send raw frame pixels to LLM in ANALYZE mode;
+            # all other modes use the YOLO text description to save vision tokens.
+            if self._current_mode == "ANALYZE":
+                frame_b64 = base64.b64encode(self._latest_frame).decode()
             self._latest_frame = None
 
         if parts or frame_b64:
@@ -206,6 +217,18 @@ class StreamProcessor:
                 frame_b64=frame_b64,
                 mode=self._current_mode,
             )
+
+    # ── Object detection ──────────────────────────────────────────────────────
+
+    async def _detect_objects(self, jpeg_bytes: bytes) -> str:
+        try:
+            from vision.detector import detect
+            result = await detect(jpeg_bytes)
+            if result and not result.is_empty:
+                return result.to_context()
+        except Exception as e:
+            log.debug("YOLO skipped: %s", e)
+        return ""
 
     # ── Audio transcription ────────────────────────────────────────────────────
 

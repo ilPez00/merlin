@@ -1,0 +1,83 @@
+MERLIN → JARVIS UPGRADE PLAN
+=============================
+Updated: session 2 — building voice loop
+
+WHAT EXISTS (session 1 skeleton):
+  audio/buffer.py       — RingBuffer 10min ✓
+  audio/transcriber.py  — openai-whisper transcription ✓
+  audio/wake.py         — regex wake word detector ✓
+  audio/storage.py      — chunk storage + weekly cleanup ✓
+  desktop/config.py     — config manager ✓
+  desktop/main.js       — Electron transparent overlay ✓
+  desktop/renderer/     — HUD UI (transcription, nav, AI panels) ✓
+  desktop/system/       — permissions, sudo ✓
+  server/server.py      — WS server, handles phone + HUD clients ✓
+  server/stream_proc.py — batches sensor data, on_wake_command ✓
+
+WHAT'S MISSING (building now):
+  [DONE] audio/mic.py      — PC mic recording loop → whisper → wake → query server
+  [DONE] audio/tts.py      — edge-tts async speak(text)
+  [DONE] server/server.py  — TTS hook: speak every AI response
+  [DONE] ai/tools.py           — haversine fix for find_places
+  [DONE] vision/detector.py   — YOLO11n detect_sync/detect, DetectionResult.to_context()
+  [DONE] stream_processor.py  — _detect_objects() + ANALYZE-only raw frame to LLM
+  [DONE] ai/memory.py         — ChromaDB EpisodicMemory, store/query/prune
+  [DONE] ai/session.py        — memory recall injected before query, store obs+qa
+  [DONE] ai/tools.py          — search_memory tool (AI can query own memory)
+  [ ] face_recognition  — enroll + tag known faces in context stream
+  [ ] HA tool           — home_assistant_call(service, entity)
+  [ ] Calendar tool     — Google Calendar API, proactive schedule
+
+VOICE LOOP ARCHITECTURE:
+  sounddevice → RingBuffer (2s chunks)
+    → Whisper (local, run_in_executor)
+      → WakeWordDetector.check()
+        → session.query(command)  [direct, same process]
+          → AI response
+            → broadcast to HUD clients
+            → edge-tts speak(response)
+
+BUILD ORDER THIS SESSION:
+  1. audio/tts.py
+  2. audio/mic.py
+  3. server/server.py — integrate mic + tts
+  4. Test voice loop end-to-end
+
+KNOWN ISSUES TO FIX:
+  - find_places() uses flat Euclidean dist (wrong) → needs haversine
+  - shell safety only blocks 4 patterns (trivial bypass)
+  - openai-whisper in transcriber.py is blocking (use run_in_executor)
+
+---
+
+SESSION 4: Widgets + voice commands + Even G2-style tools (2026-05-06)
+
+Implemented:
+- ai/widgets.py: 12-widget registry, per-mode assignment (max 4), tiredness heuristic,
+  runtime data store, resolve() for display strings
+- audio/command.py: voice command parser — up/down, show [widget], switch to [mode],
+  how tired am I, show todos/spending/calendar, note this, summarize conversation,
+  incognito mode. Falls through to LLM if no match.
+- ai/tools.py: 9 new tools — log_sleep, log_expense, get_tiredness, get_todo_list,
+  add_todo, complete_todo, log_prep_note, conversation_summary, get_conversation_cue,
+  memory_search, memory_save (28 total tools)
+- desktop/widgets/left_panel.py: context strip renderer — shows up to 4 widgets
+  per mode below the status section, auto-refreshes
+- desktop/screens/main_screen.py: voice commands wired into voice loop (local actions
+  skip LLM), mode switching refreshes context strip, widget refresh timer (30s)
+
+Even G2 patterns replicated:
+- Dashboard widgets → context strip (12 data sources, user-configured per mode)
+- AI Cues → get_conversation_cue() tool
+- Prep Notes → log_prep_note() tool
+- AI Summary → conversation_summary() tool
+- Even AI voice → voice command parser (up/down/show/switch)
+- Health → tiredness heuristic + Fitbit integration planned
+- QuickList → add_todo / complete_todo / get_todo_list
+
+Next planned:
+- Integration framework (weather, calendar, fitbit, stripe)
+- Teleprompter NOTES mode widget
+- Dual-view translate in TALK mode
+
+- Sign: Claude

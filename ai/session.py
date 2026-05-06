@@ -10,11 +10,13 @@ import os
 from pathlib import Path
 
 from . import agent as agent_module
+from .memory import get_memory
 
 log = logging.getLogger("merlin.session")
 
 SYSTEM_PROMPT_PATH = Path(__file__).parent / "system_prompt.txt"
 MAX_HISTORY = 30  # max messages to keep (older ones are trimmed)
+MEMORY_RECALL = 4  # how many past memories to inject per query
 
 
 def _build_backend():
@@ -92,6 +94,11 @@ class MerlinSession:
                 log.info("context pushed (%d chars, frame=%s, mode=%s)",
                          len(text), frame_b64 is not None, mode)
                 self._trim_history()
+                if text.strip():
+                    try:
+                        get_memory().store(text, kind="observation", mode=mode)
+                    except Exception:
+                        pass
 
     # ── Query (agentic) ───────────────────────────────────────────────────────
 
@@ -99,21 +106,47 @@ class MerlinSession:
         """
         Explicit query — runs the agentic tool-use loop and returns the answer.
         Updates conversation history with the final Q&A pair.
+        Injects relevant episodic memories before the query.
         """
         async with self._lock:
+            # Retrieve relevant past memories and inject as a system-style context message
+            mem_prefix = self._build_memory_prefix(question)
+            augmented_history = (
+                self._history + [{"role": "user", "content": mem_prefix}]
+                if mem_prefix else list(self._history)
+            )
+
             answer = await agent_module.run(
                 backend=self._backend,
                 system_prompt=self._system_prompt,
-                history=self._history,
+                history=augmented_history,
                 query=question,
                 mode=mode,
             )
-            # Append the Q&A to history (simple form, no tool calls)
+            # Append Q&A to history and memory
             self._history.append({"role": "user", "content": question})
             self._history.append({"role": "assistant", "content": answer})
             self._trim_history()
+            try:
+                get_memory().store(
+                    f"Q: {question}\nA: {answer}",
+                    kind="qa",
+                    mode=mode,
+                )
+            except Exception:
+                pass
             log.info("query answered (%d history msgs)", len(self._history))
             return answer
+
+    def _build_memory_prefix(self, question: str) -> str:
+        try:
+            memories = get_memory().query(question, n=MEMORY_RECALL)
+            if not memories:
+                return ""
+            block = "\n".join(memories)
+            return f"[Relevant past context from memory]\n{block}"
+        except Exception:
+            return ""
 
     # ── Auto-observe ──────────────────────────────────────────────────────────
 
