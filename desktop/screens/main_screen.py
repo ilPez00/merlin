@@ -204,6 +204,13 @@ class MainScreen(Screen):
     async def _handle_query(self, text: str):
         cv = self.query_one("#chat-view", ChatView)
         ts = time.strftime("%H:%M:%S")
+
+        # Behavioral cues — show instantly without agent
+        if text.startswith("[cue]"):
+            msg = text.replace("[cue]", "").strip()
+            cv.add_message("assistant", f"💡 {msg}", ts)
+            return
+
         cv.add_message("user", text, ts)
         _log_conversation("user", text, desktop_config.get("activity_mode", "WORK"))
 
@@ -394,6 +401,12 @@ class MainScreen(Screen):
                             self.refresh()
                         except Exception:
                             pass
+
+                    # Behavioral cues (Tier 1 local)
+                    from ai.cues import process_transcript
+                    cues = process_transcript(text)
+                    for cue in cues:
+                        self.post_message(self.VoiceQuery(f"[cue] {cue['text']}"))
 
                     # Voice command check
                     cmd = parse_voice_command(text)
