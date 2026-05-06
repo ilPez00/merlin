@@ -21,19 +21,18 @@ from audio.command import parse as parse_voice_command
 
 log = logging.getLogger("merlin.desktop")
 
-CONV_DIR = Path.home() / ".merlin" / "conversations"
+CONV_PATH = Path.home() / ".merlin" / "conversations.md"
 
 
 def _log_conversation(role: str, text: str, mode: str = "WORK"):
-    """Append a conversation entry to ~/.merlin/conversations/YYYY-MM-DD.md."""
+    """Append a conversation entry to ~/.merlin/conversations.md."""
     try:
-        CONV_DIR.mkdir(parents=True, exist_ok=True)
+        CONV_PATH.parent.mkdir(parents=True, exist_ok=True)
         date = time.strftime("%Y-%m-%d")
         ts = time.strftime("%H:%M:%S")
-        path = CONV_DIR / f"{date}.md"
         prefix = "**You**" if role == "user" else "**Merlin**" if role == "assistant" else f"**{role.title()}**"
-        line = f"\n### {ts} ({mode})\n{prefix}: {text}\n"
-        with open(path, "a", encoding="utf-8") as f:
+        line = f"\n### {date} {ts} ({mode})\n{prefix}: {text}\n"
+        with open(CONV_PATH, "a", encoding="utf-8") as f:
             f.write(line)
     except Exception as e:
         log.warning("failed to log conversation: %s", e)
