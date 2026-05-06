@@ -1,108 +1,211 @@
-# Merlin — Jarvis HUD Realization Plan
+# Merlin — Development Roadmap
 
-## Vision
+**Mission:** Provide easy integration with technology and guide the user into their best possible life.
 
-Merlin becomes a Jarvis-like AI assistant using the **PC monitor as a transparent HUD overlay** (like Even Realities G2 glasses, but on any screen). The phone streams sensor data (camera, GPS, audio); the PC server processes everything and pushes live information to both phone panels and the desktop HUD.
+**10,450 LOC · 41 tools · 12 widgets · 9 modes · 4 platform clients**
 
-## Architecture
+---
 
-```
-PHONE (sensors)                 PC SERVER (compute)             PC HUD (transparent overlay)
-┌─────────────────┐            ┌──────────────────────┐        ┌──────────────────────────┐
-│ Camera + MoveNet│─frames───→│ StreamProcessor      │        │  Electron transparent    │
-│ GPS / IMU       │─gps/imu──→│   → rep_counter      │──trans─│  always-on-top window    │
-│ Web Speech API  │─audio────→│   → Whisper STT      │──trans─│                          │
-│ (wake word +    │─transcr──→│   → translation      │──trans─│  ┌──Nav──────┐┌──AI─────┐│
-│  real-time STT) │           │   → OSRM nav          │──nav──→│  │Turn right ││Analyzed ││
-│                  │           │   → screen capture    │        │  │on Main St ││your scrn││
-│ Slide-in panels:│←─response─│ MerlinSession→Agent   │        │  └───────────┘└─────────┘│
-│  exercise/food/ │←─panel_cmd│   → tools             │        │                          │
-│  places/goals   │           │   → ~/.merlin/data/   │        │  ┌──Transcription────────┐│
-│                  │           │   → Nominatim (places)│        │  │"I think we should..."  ││
-└─────────────────┘           └──────────────────────┘        │  └────────────────────────┘│
-                                                                │  ┌──Translation──────────┐│
-                                                                │  │"Penso che dovremmo..." ││
-                                                                │  └────────────────────────┘│
-                                                                └──────────────────────────┘
-```
+## Completed Foundation
 
-## Key Protocol Extensions
-
-### Phone → Server
-
-| Type | Purpose |
+| Layer | Status |
 |---|---|
-| `transcription` | Real-time Web Speech API results (interim/final) forwarded for HUD subtitles |
+| Agent engine (41 tools, tool loop, 3 backends) | ✅ |
+| Desktop TUI (voice pipeline, sudo, TTS, mic test, settings) | ✅ |
+| Phone PWA/APK (Visor, Copilot, Desktop modes, camera, lens) | ✅ |
+| Phone app standalone + background sync to PC server | ✅ |
+| Audio pipeline (RingBuffer, Whisper, wake word, storage, weekly cleanup) | ✅ |
+| Context strip (12 widgets, per-mode config, tiredness heuristic) | ✅ |
+| Voice command parser ("up/down/show/switch", 16 patterns) | ✅ |
+| Even G2 features (Prep Notes, Conversation Summary, AI Cues, Memory) | ✅ |
+| Proactive advisor (30-min LLM tips from todos, expenses, tiredness) | ✅ |
+| Dossier system (LLM-built profiles for people/places/events/activities, Ctrl+D export) | ✅ |
+| Conversation logging (~/.merlin/conversations.md) | ✅ |
+| Behavioral cues (name recall, follow-up detection, topic bridges, compliment triggers) | ✅ |
+| Hardware specs (ESP32-S3 firmware, PCB, mechanical, BOM, ~$50) | ✅ |
+| Android APK (signed release, 2.9MB, GitHub Releases) | ✅ |
 
-### Server → All Clients
+---
 
-| Type | Purpose |
-|---|---|
-| `transcription` | Real-time subtitle text + is_final flag |
-| `translation` | `{ original, translated, source_lang, target_lang }` |
-| `navigation_update` | `{ instruction, distance_m, turn, lat, lon, summary }` |
-| `system_overlay` | `{ text, position, dismiss_after }` — toast notifications on HUD |
+## Architecture: MCP-first integrations
 
-## HUD Overlay Layout (Desktop Electron)
+Merlin does NOT hardcode integrations. Instead, it's an **MCP (Model Context Protocol) client**. Users configure MCP servers in Settings, and the agent discovers their tools dynamically at runtime.
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│  🧭 NAV              (top-left)         💬 AI     (top-right)  │
-│  "Turn right on Main St (200m)"          "3 sets of 10 pushups"│
-│                                                                 │
-│                                                                 │
-│  📝 TRANSCRIPTION (bottom)          🌐 TRANSLATION (bottom)    │
-│  "I think we should consider..."     "Penso che dovremmo..."   │
-│  "the new approach for scaling"      "il nuovo approccio per..."│
-└─────────────────────────────────────────────────────────────────┘
+User configures in Settings:
+┌─────────────────────────────────────┐
+│  MCP Servers                         │
+│                                      │
+│  ☑ Praxis (local)                    │
+│     URL: http://localhost:3001       │
+│                                      │
+│  ☑ Google Calendar                   │
+│     Status: Connected (OAuth)        │
+│                                      │
+│  ☐ Fitbit                            │
+│     Status: Disconnected             │
+│                                      │
+│  [+ Add MCP Server]                  │
+└─────────────────────────────────────┘
+
+At runtime:
+  agent discovers tools from all connected MCP servers
+  tools appear alongside read_file, run_shell, etc.
 ```
 
-- Frame-less, chromeless, transparent background
-- Always-on-top, click-through (mouse passes to desktop)
-- `Ctrl+Shift+H` to toggle interaction mode
-- Corner panels auto-position, dim after inactivity
-
-## New Tools
-
-| Tool | Function | Backend |
+| MCP server | Provides tools for | Auth |
 |---|---|---|
-| `capture_screen()` | Screenshot of PC desktop → base64 | `mss` lib |
-| `translate_text(text, target_lang)` | LLM-based translation | Merlin backend |
-| `get_navigation(dest_lat, dest_lon)` | Turn-by-turn directions | OSRM + GPS |
+| **Praxis** | goals, diary, schedule, trackers | API key |
+| **Google Calendar** | events, calendar queries | OAuth (browser) |
+| **OpenWeather** | weather at GPS | API key |
+| **Fitbit** | steps, sleep, HR, active minutes | OAuth (browser) |
+| **Yazio** | calories, meals, macros | API key |
+| **Revolut** | transactions, spending | API key |
+| **Resend / SendGrid** | send email | API key |
 
-## Implementation Phases
+All OAuth flows: **open browser → user authorizes → token saved to `~/.merlin/integrations/`**. No manual token copy-paste.
 
-### Phase 1 ✓ (Done)
+---
 
-Multi-client server, 12 tools, phone HUD panels, wake word, pose estimation, rep counter, system prompt
+## Phase A — Connected Merlin (~5 days)
 
-### Phase 2 (This sprint)
+Integrations that fill empty widgets and connect to real services.
 
-| # | Component | Files |
-|---|---|---|
-| 1 | Electron desktop HUD | `desktop/` (5 files) |
-| 2 | Screen capture tool | `ai/tools.py`, `server/requirements.txt` |
-| 3 | Translation tool | `ai/tools.py`, `ai/system_prompt.txt` |
-| 4 | Navigation tool | `ai/tools.py` + OSRM API |
-| 5 | Real-time transcription stream | `app/hud.js`, `server/stream_processor.py` |
-| 6 | Translation module | `server/translate.py` |
+### A1 — MCP client
+- `ai/mcp/client.py` — connects to MCP servers, discovers tools, calls tools
+- `ai/mcp/registry.py` — manages server list, health checks, reconnection
+- Settings screen: add/remove MCP servers, test connection, view tools
 
-### Phase 3 (Future)
+### A2 — MCP servers (built-in)
+- `ai/mcp/servers/weather.py` — OpenWeather (API key, no OAuth)
+- `ai/mcp/servers/calendar.py` — Google Calendar (OAuth, browser)
+- `ai/mcp/servers/email.py` — Resend/SendGrid (API key)
+- Each server is a standalone script that implements the MCP protocol
 
-- Voice-controlled HUD layout ("move nav to bottom-right")
-- Multi-monitor support
-- Eye tracking for attention-aware HUD
-- G2 glasses API integration (hardware)
-- Smart ring integration (phone accelerometer as gesture input)
+### A3 — Praxis MCP server
+- `ai/mcp/servers/praxis.py` — connects to Praxis backend
+- Tools: `get_goals`, `log_diary_entry`, `get_schedule`, `get_progress`
+- Syncs local diary entries to Praxis notebook
+- Fills `schedule` widget with next time slot
+- Auto-switches activity mode based on schedule
 
-## Data Storage
+### A4 — Widget data flow
+- Widgets now pull from MCP servers instead of `ai/widgets.py` runtime
+- `weather` → OpenWeather MCP
+- `next_event` → Google Calendar MCP
+- `cal_burned` → Fitbit MCP
+- `cal_consumed` → Yazio MCP
+- `money_spent` → Revolut MCP
+- Fall back to heuristic/empty if server is disconnected
 
-All user data in `~/.merlin/data/` as JSON:
+---
 
-| File | Contents |
+## Phase B — Memory & Planning (~5 days)
+
+Persistent semantic memory and proactive life planning.
+
+### B1 — ChromaDB persistent memory
+- Replace `ai/memory.py` JSON stubs with ChromaDB
+- Embed every conversation entry, diary entry, and tool result
+- `memory_search()` returns semantically relevant past context
+- Dossier LLM prompts include relevant memory chunks
+
+### B2 — Axiom daily schedule
+- Pull daily schedule from Praxis MCP
+- Show next time slot in context strip with countdown
+- Auto-switch mode based on schedule activity type
+- Advisor warns before schedule transitions
+
+### B3 — Health dashboard (via MCP)
+- Fitbit: steps, sleep HR, active minutes
+- Yazio: calories consumed, meals
+- Tiredness heuristic uses real sleep/activity data
+
+### B4 — Finance dashboard (via MCP)
+- Revolut: daily transactions, spending by category
+- Auto-fills `money_spent` widget
+- Advisor flags spending patterns
+
+---
+
+## Phase C — Daily Driver (~5 days)
+
+Polish, offline mode, production readiness.
+
+### C1 — Daemon mode
+- `desktop/daemon.py` — runs without TUI, tray icon
+- OS notifications for wake word, advisor tips, meeting alerts
+- Voice pipeline stays active, responses as notifications
+
+### C2 — Face recognition
+- Wire `vision/face_recognizer.py` into dossier system
+- When camera detects known face, auto-tags conversation with that person
+- Dossier gets meeting timestamp and duration
+
+### C3 — Local LLM (Ollama)
+- `ai/backends/ollama.py` — OpenAI-compat wrapper
+- Fully offline operation
+- Settings toggle: cloud / local / hybrid
+
+### C4 — Voice activity detection
+- Silero VAD before Whisper transcription
+- Only runs Whisper when speech detected
+- Reduces CPU ~10x
+
+### C5 — TUI polish
+- Connection status indicator per MCP server
+- Crash recovery / auto-restart
+- First-run setup wizard (API key, wake word, mic test)
+- Error notifications in OS notification center
+
+---
+
+## Phase D — Hardware Visor (~2 weeks)
+
+### D1 — Prototype
+- Order XIAO ESP32S3 Sense + components (~$50 BOM)
+- Firmware: WiFi + WebSocket handshake
+- Add OLED display, encoder, IMU
+- 3D print Wayfarer frame mount
+- Test continuous voice + camera streaming to PC server
+
+### D2 — Custom PCB
+- Design shield PCB (KiCad)
+- Order from JLCPCB
+- Assemble and test
+
+### D3 — Production frame
+- Magnesium frame design (injection mold)
+- Micro-OLED waveguide display
+- Charging case (7 charges)
+- BLE ring input
+
+---
+
+## MCP Server Development Order
+
+| Server | Phase | Auth | Widgets filled |
+|---|---|---|---|
+| OpenWeather | A2 | API key | `weather` |
+| Google Calendar | A2 | OAuth | `next_event` |
+| Email (Resend) | A2 | API key | — |
+| Praxis | A3 | API key | `schedule` |
+| Fitbit | B3 | OAuth | `steps`, `cal_burned`, `sleep_hours` |
+| Yazio | B3 | API key | `cal_consumed` |
+| Revolut | B4 | API key | `money_spent` |
+
+---
+
+## Key decisions
+
+| Decision | Choice |
 |---|---|
-| `user_profile.json` | Name, age, weight, goals, preferences |
-| `exercise_log.json` | [{timestamp, exercise, reps, sets}] |
-| `food_log.json` | [{timestamp, food, calories, macros}] |
-| `places.json` | [{name, lat, lon, category}] |
-| `action_items.json` | [{timestamp, item, done}] |
+| Phase order | A → B → C → D |
+| MCP architecture | User-configured servers, agent discovers tools dynamically |
+| OAuth flow | Open browser for everything, local callback server on random port |
+| Default provider | DeepSeek (user can change in settings) |
+| Voice pipeline | Push-to-talk + wake word ("marlin"/"merlino"/user-set) |
+| TTS voice | edge-tts JennyNeural (user-changeable in settings) |
+| Conversation storage | Single file: ~/.merlin/conversations.md |
+| Dossier export | ~/.merlin/dossiers.md (Ctrl+D) |
+| Widget limit | 4 per mode context strip |
