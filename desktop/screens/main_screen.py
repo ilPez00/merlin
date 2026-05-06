@@ -2,6 +2,7 @@ import asyncio
 import logging
 import os
 import time
+from pathlib import Path
 
 from textual.screen import Screen
 from textual.widgets import Header, Footer
@@ -19,6 +20,23 @@ from desktop.system.sudo import sudo_ctx
 from audio.command import parse as parse_voice_command
 
 log = logging.getLogger("merlin.desktop")
+
+CONV_DIR = Path.home() / ".merlin" / "conversations"
+
+
+def _log_conversation(role: str, text: str, mode: str = "WORK"):
+    """Append a conversation entry to ~/.merlin/conversations/YYYY-MM-DD.md."""
+    try:
+        CONV_DIR.mkdir(parents=True, exist_ok=True)
+        date = time.strftime("%Y-%m-%d")
+        ts = time.strftime("%H:%M:%S")
+        path = CONV_DIR / f"{date}.md"
+        prefix = "**You**" if role == "user" else "**Merlin**" if role == "assistant" else f"**{role.title()}**"
+        line = f"\n### {ts} ({mode})\n{prefix}: {text}\n"
+        with open(path, "a", encoding="utf-8") as f:
+            f.write(line)
+    except Exception as e:
+        log.warning("failed to log conversation: %s", e)
 
 try:
     import sounddevice as sd
@@ -168,6 +186,7 @@ class MainScreen(Screen):
             mt = self.query_one("#mode-selector", ModeSelector)
             mt.active = payload
             cv.add_message("system", f"Switched to {payload} mode")
+            _log_conversation("system", f"Switched to {payload} mode", payload)
         elif action == "query":
             cv.add_message("system", f"Querying {payload}...")
             self._handle_query(payload)
@@ -187,6 +206,7 @@ class MainScreen(Screen):
         cv = self.query_one("#chat-view", ChatView)
         ts = time.strftime("%H:%M:%S")
         cv.add_message("user", text, ts)
+        _log_conversation("user", text, desktop_config.get("activity_mode", "WORK"))
 
         # Check for sudo password request
         if "sudo password" in text.lower() or text.strip() == "__sudo_pw__":
@@ -245,9 +265,11 @@ class MainScreen(Screen):
                 return
 
             cv.add_message("assistant", response, time.strftime("%H:%M:%S"))
+            _log_conversation("assistant", response, desktop_config.get("activity_mode", "WORK"))
             await self._speak(response)
         except Exception as e:
             cv.add_message("assistant", f"Error: {e}", time.strftime("%H:%M:%S"))
+            _log_conversation("system", f"Error: {e}", desktop_config.get("activity_mode", "WORK"))
 
     async def _prompt_sudo(self, original_query: str):
         """Show sudo dialog, capture password, re-run query."""
