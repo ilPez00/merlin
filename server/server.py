@@ -202,7 +202,6 @@ async def _mic_command(session: MerlinSession, text: str):
     try:
         response = await session.query(text, mode="QUERY")
         await broadcast({"type": "response", "text": response, "mode": "QUERY"})
-        # Speak the response aloud
         try:
             from audio.tts import speak
             asyncio.create_task(speak(response))
@@ -212,27 +211,75 @@ async def _mic_command(session: MerlinSession, text: str):
         log.error("mic command error: %s", e)
 
 
+# ── ADVISOR mode state ────────────────────────────────────────────────────────
+
+_advisor_active = False
+_advisor_task: asyncio.Task | None = None
+ADVISOR_INTERVAL = 7  # seconds between suggestions
+
+
+async def _advisor_loop(session: MerlinSession):
+    """Runs while ADVISOR mode is active. Generates silent tactical suggestions."""
+    log.info("ADVISOR mode started")
+    await broadcast({"type": "advisor_state", "active": True})
+    try:
+        while True:
+            suggestion = await session.advisor_observe()
+            if suggestion:
+                log.debug("suggestion: %s", suggestion)
+                await broadcast({"type": "suggestion", "text": suggestion})
+            await asyncio.sleep(ADVISOR_INTERVAL)
+    except asyncio.CancelledError:
+        pass
+    finally:
+        log.info("ADVISOR mode stopped")
+        await broadcast({"type": "advisor_state", "active": False})
+
+
+async def _toggle_advisor(session: MerlinSession):
+    """Stealth word fired — toggle ADVISOR mode on/off silently."""
+    global _advisor_active, _advisor_task
+    _advisor_active = not _advisor_active
+    if _advisor_active:
+        _advisor_task = asyncio.create_task(_advisor_loop(session))
+    else:
+        if _advisor_task and not _advisor_task.done():
+            _advisor_task.cancel()
+            await asyncio.gather(_advisor_task, return_exceptions=True)
+        _advisor_task = None
+
+
 async def main():
     session = MerlinSession()
     await session.start()
 
-    # ── PC microphone listener (wake word → voice command) ────────────────────
+    # ── PC microphone listener (wake word + stealth word) ─────────────────────
     mic_enabled = os.environ.get("MERLIN_MIC", "1") != "0"
     mic_listener = None
     if mic_enabled:
         try:
             from audio.mic import MicListener
-            from audio.wake import WakeWordDetector
-            import ast, os as _os
-            words_env = _os.environ.get("MERLIN_WAKE_WORDS", "")
+            import ast
+            words_env = os.environ.get("MERLIN_WAKE_WORDS", "")
             wake_words = ast.literal_eval(words_env) if words_env else None
+            stealth_word = os.environ.get("MERLIN_STEALTH_WORD", "") or None
 
             async def _on_command(text: str):
                 await _mic_command(session, text)
 
-            mic_listener = MicListener(on_command=_on_command, wake_words=wake_words)
+            async def _on_stealth():
+                await _toggle_advisor(session)
+
+            mic_listener = MicListener(
+                on_command=_on_command,
+                wake_words=wake_words,
+                stealth_word=stealth_word,
+                on_stealth=_on_stealth if stealth_word else None,
+            )
             mic_listener.start(asyncio.get_event_loop())
             log.info("PC mic listener active (set MERLIN_MIC=0 to disable)")
+            if stealth_word:
+                log.info("stealth word set (ADVISOR mode trigger ready)")
         except Exception as e:
             log.warning("mic listener not started: %s", e)
 

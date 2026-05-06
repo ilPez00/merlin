@@ -181,6 +181,55 @@ class MerlinSession:
                 self._trim_history()
             return observation or None
 
+    # ── Advisor observe ───────────────────────────────────────────────────────
+
+    async def advisor_observe(self) -> str | None:
+        """
+        ADVISOR mode: generate a single short tactical suggestion (≤15 words)
+        grounded in the current context window + user goals.
+        No tool use. No history mutation. Silent.
+        """
+        from .advisor import ADVISOR_SYSTEM, build_prompt
+        from .goals import load, to_prompt_str
+
+        async with self._lock:
+            if not self._history:
+                return None
+
+            goals_str = await asyncio.get_event_loop().run_in_executor(
+                None, lambda: to_prompt_str(load())
+            )
+            # Summarise recent context for the advisor prompt
+            recent = self._history[-6:]
+            context_parts = []
+            for msg in recent:
+                c = msg.get("content", "")
+                if isinstance(c, str) and c.strip():
+                    context_parts.append(c[:400])
+                elif isinstance(c, list):
+                    for item in c:
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            context_parts.append(item["text"][:400])
+
+            context_str = "\n".join(context_parts)
+            prompt = build_prompt(context_str, goals_str)
+
+            try:
+                response = await self._backend.complete(
+                    messages=[{"role": "user", "content": prompt}],
+                    tools=None,
+                    system=ADVISOR_SYSTEM,
+                    max_tokens=60,
+                )
+                suggestion = (response.text or "").strip()
+                # Reject empty or overly long suggestions
+                if not suggestion or len(suggestion.split()) > 25:
+                    return None
+                return suggestion
+            except Exception as e:
+                log.debug("advisor_observe error: %s", e)
+                return None
+
     # ── Internal ──────────────────────────────────────────────────────────────
 
     def _trim_history(self):

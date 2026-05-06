@@ -13,6 +13,7 @@ from textual.screen import Screen
 
 from desktop.screens.launch_screen import LaunchScreen
 from desktop.screens.main_screen import MainScreen
+from desktop.config import desktop_config
 
 
 class MerlinTUI(App):
@@ -124,7 +125,16 @@ class MerlinTUI(App):
     """
 
     def on_mount(self):
-        self.push_screen("launch")
+        # Forward saved API key to env for the AI backend
+        api_key = desktop_config.get("api_key")
+        if api_key:
+            os.environ["MERLIN_API_KEY"] = api_key
+
+        # Skip launch screen if API key is already saved
+        if api_key:
+            self.push_screen("main")
+        else:
+            self.push_screen("launch")
 
 
 if __name__ == "__main__":

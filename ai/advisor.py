@@ -1,91 +1,80 @@
 """
 Merlin — Tactical Advisor
-Generates short, situation-specific suggestions toward the user's goals.
-Output is always ≤20 words, immediately actionable, no preamble.
+Goal-first situational intelligence. Goals are preset and permanent.
+Every suggestion exists to bend the current situation toward the user's will.
+Output: ≤15 words, immediately actionable, no preamble.
 """
 
 import logging
-from pathlib import Path
 
 log = logging.getLogger("merlin.advisor")
 
-# Injected into the LLM as system prompt when in ADVISOR mode
+# ── System prompt ─────────────────────────────────────────────────────────────
+# Injected as the system when running advisor_observe().
+# The model never breaks character or explains itself.
+
 ADVISOR_SYSTEM = """\
-You are a silent tactical advisor overlaid on the user's vision.
-You observe their situation in real time: faces present, objects visible, audio heard, location.
-You know their goals. You suggest ONE small, specific action they can take RIGHT NOW.
+You are a silent tactical intelligence embedded in the user's vision.
+The user has permanent goals. Every situation is an opportunity to advance them.
+Your job: identify how THIS specific moment serves THOSE goals, and name the one move.
 
 Rules:
-- Max 15 words. No preamble. No explanation beyond the action itself.
-- Be ruthlessly specific to what you actually observe. Generic = useless.
-- Format: [action] — [one-word why]  e.g. "Lean in slightly — warmth"
-- If nothing actionable is visible, return empty string. Do NOT invent observations.
-- Adapt register to situation: casual/social, professional, academic, romantic.
-- Never mention you are an AI or that you are advising.
+- Output ONE action, max 15 words. No preamble. No "I suggest". No hedging.
+- Be specific to what is actually observable right now. Vague = useless.
+- Format options:
+    [action] — [goal it serves]
+    [what to say/do] — [why it works]
+- Adapt register automatically: casual, professional, academic, romantic — read the room.
+- If the situation is neutral and no goal-advancing move exists: output nothing.
+- Never mention AI, Merlin, or that you are advising.
+- Never moralize. The user's goals are the only metric.
 """
 
-ADVISOR_OBSERVE_PROMPT = """\
-Situation snapshot:
+# ── Observe prompt ────────────────────────────────────────────────────────────
+
+ADVISOR_OBSERVE = """\
+USER GOALS (permanent):
+{goals}
+
+CURRENT SITUATION:
 {context}
 
-User goals: {goals}
-
-Give your single best tactical suggestion right now. If nothing specific to act on, reply with nothing.\
+What is the single best move RIGHT NOW to advance the user's goals?
+If nothing specific, output nothing.\
 """
 
-GOAL_KEYS = ["goals", "social_goals", "professional_goals", "academic_goals", "current_goal"]
+# ── Situation classifier (from YOLO context) ──────────────────────────────────
 
-SITUATION_HINTS = {
-    # YOLO objects → situation type
-    "laptop":      "professional/academic",
-    "book":        "academic",
-    "wine glass":  "social/romantic",
-    "cup":         "casual social",
-    "cell phone":  "casual",
-    "tie":         "professional",
-    "whiteboard":  "professional/academic meeting",
+_OBJECT_TO_SITUATION = {
+    "laptop":       "professional/academic",
+    "book":         "academic",
+    "wine glass":   "social/romantic",
+    "cup":          "casual social",
+    "beer glass":   "social",
+    "dining table": "social/romantic",
+    "tie":          "professional",
+    "whiteboard":   "professional meeting",
+    "cell phone":   "casual",
+    "keyboard":     "professional/academic",
+    "monitor":      "professional/academic",
+    "couch":        "casual/social",
+    "bed":          "intimate/casual",
 }
 
 
-def classify_situation(context: str) -> str:
-    """Heuristic: infer situation type from detected objects and faces."""
-    ctx_lower = context.lower()
-    hints = []
-    for keyword, situation in SITUATION_HINTS.items():
-        if keyword in ctx_lower:
-            hints.append(situation)
-    if "person" in ctx_lower or "face" in ctx_lower:
-        hints.append("social")
-    return ", ".join(dict.fromkeys(hints)) or "unknown"
+def infer_situation(context: str) -> str:
+    ctx = context.lower()
+    hits = []
+    for obj, sit in _OBJECT_TO_SITUATION.items():
+        if obj in ctx:
+            hits.append(sit)
+    if "person" in ctx or "[faces]" in ctx:
+        hits.append("social")
+    return " | ".join(dict.fromkeys(hits)) or "unclassified"
 
 
 def build_prompt(context: str, goals_str: str) -> str:
-    return ADVISOR_OBSERVE_PROMPT.format(
+    return ADVISOR_OBSERVE.format(
+        goals=goals_str.strip() or "(none set — run: python -m ai.goals)",
         context=context.strip() or "(no sensor data yet)",
-        goals=goals_str.strip() or "not specified — infer from context",
     )
-
-
-def load_goals_str() -> str:
-    """Read user goals from ~/.merlin/data/user_profile.json."""
-    try:
-        import json
-        from pathlib import Path
-        profile_path = Path.home() / ".merlin" / "data" / "user_profile.json"
-        if not profile_path.exists():
-            return ""
-        profile = json.loads(profile_path.read_text())
-        parts = []
-        for key in GOAL_KEYS:
-            val = profile.get(key)
-            if val:
-                if isinstance(val, dict):
-                    parts.append(f"{key}: " + ", ".join(f"{k}={v}" for k, v in val.items()))
-                elif isinstance(val, list):
-                    parts.append(f"{key}: " + ", ".join(str(v) for v in val))
-                else:
-                    parts.append(f"{key}: {val}")
-        return "\n".join(parts)
-    except Exception as e:
-        log.debug("could not load goals: %s", e)
-        return ""

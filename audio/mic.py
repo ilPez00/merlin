@@ -27,11 +27,15 @@ class MicListener:
         self,
         on_command: Callable[[str], Awaitable[None]],
         wake_words: list[str] | None = None,
+        stealth_word: str | None = None,
+        on_stealth: Callable[[], Awaitable[None]] | None = None,
     ):
         self._ring = RingBuffer(seconds=30)
         self._transcriber = Transcriber()
         self._wake = WakeWordDetector(wake_words)
         self._on_command = on_command
+        self._stealth_word = stealth_word.lower().strip() if stealth_word else None
+        self._on_stealth = on_stealth
         self._running = False
         self._loop: asyncio.AbstractEventLoop | None = None
 
@@ -44,6 +48,8 @@ class MicListener:
         t.start()
         asyncio.ensure_future(self._transcribe_loop(), loop=self._loop)
         log.info("mic listener started (wake words: %s)", self._wake.words)
+        if self._stealth_word:
+            log.info("stealth word configured")
 
     def stop(self) -> None:
         self._running = False
@@ -99,6 +105,12 @@ class MicListener:
         )
         if not text:
             return
+
+        # Stealth word check — fires silently, no logging of transcript content
+        if self._stealth_word and self._on_stealth:
+            if self._stealth_word in text.lower():
+                asyncio.ensure_future(self._on_stealth())
+                return  # don't also check wake word
 
         matched = self._wake.check(text)
         if matched:

@@ -11,6 +11,8 @@ let ws = null;
 let activityTimer = null;
 let lastTranscription = '';
 let lastTranslation = '';
+let suggestionFadeTimer = null;
+const SUGGESTION_DISPLAY_MS = 9000;  // how long each suggestion stays visible
 
 // ── DOM refs ──────────────────────────────────────────────────────
 
@@ -108,6 +110,14 @@ function handleMessage(msg) {
       );
       break;
 
+    case 'suggestion':
+      showSuggestion(msg.text);
+      break;
+
+    case 'advisor_state':
+      setAdvisorActive(msg.active);
+      break;
+
     case 'status':
       setStatus('connected', `✓ ${msg.model || 'MERLIN HUD'}`);
       break;
@@ -193,6 +203,39 @@ function showAIResponse(text, mode) {
 
   body.textContent = text;
   body.scrollTop = body.scrollHeight;
+}
+
+// ── ADVISOR teleprompter ──────────────────────────────────────────
+
+function showSuggestion(text) {
+  if (!text || !text.trim()) return;
+  const panel = $('suggestion-panel');
+  const textEl = $('suggestion-text');
+
+  // Cancel pending fade
+  clearTimeout(suggestionFadeTimer);
+  panel.classList.remove('hidden', 'fading');
+
+  textEl.textContent = text.trim();
+
+  // Auto-fade after display duration
+  suggestionFadeTimer = setTimeout(() => {
+    panel.classList.add('fading');
+    setTimeout(() => panel.classList.add('hidden'), 1200);
+  }, SUGGESTION_DISPLAY_MS);
+}
+
+function setAdvisorActive(active) {
+  document.body.classList.toggle('advisor-active', active);
+  if (!active) {
+    clearTimeout(suggestionFadeTimer);
+    const panel = $('suggestion-panel');
+    panel.classList.add('fading');
+    setTimeout(() => {
+      panel.classList.add('hidden');
+      panel.classList.remove('fading');
+    }, 1200);
+  }
 }
 
 // ── Activity tracking ─────────────────────────────────────────────

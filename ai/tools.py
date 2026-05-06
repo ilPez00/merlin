@@ -560,6 +560,32 @@ async def _sudo_run_shell(cmd: str) -> str:
     return await _original_run_shell(cmd)
 
 
+# ── Goal tools ────────────────────────────────────────────────────────────────
+
+async def show_goals() -> str:
+    """Show the user's current persistent goals."""
+    from .goals import load, to_prompt_str
+    return to_prompt_str(load())
+
+
+async def update_goal(domain: str, items: list) -> str:
+    """Update goals for a specific domain (core/social/professional/romantic/academic)."""
+    from .goals import set_goal
+    return set_goal(domain, [str(i) for i in items])
+
+
+async def set_current_focus(focus: str) -> str:
+    """Set the current priority focus domain (e.g. 'social', 'professional')."""
+    from .goals import set_focus
+    return set_focus(focus)
+
+
+async def add_goal_note(note: str) -> str:
+    """Add or replace the contextual notes Merlin carries about the user's situation."""
+    from .goals import set_notes
+    return set_notes(note)
+
+
 # ── Face recognition tools ────────────────────────────────────────────────────
 
 async def enroll_face(name: str) -> str:
@@ -819,6 +845,10 @@ TOOL_FUNCTIONS = {
     "forget_face":          forget_face,
     "list_known_faces":     list_known_faces,
     "search_memory":        search_memory,
+    "show_goals":           show_goals,
+    "update_goal":          update_goal,
+    "set_current_focus":    set_current_focus,
+    "add_goal_note":        add_goal_note,
 }
 
 TOOL_DEFINITIONS = [
@@ -1210,6 +1240,57 @@ TOOL_DEFINITIONS = [
                     "n":     {"type": "integer", "description": "Max results (default 5)."},
                 },
                 "required": ["query"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "show_goals",
+            "description": "Display the user's current persistent goals across all domains.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_goal",
+            "description": "Set or replace goals for a domain: core, social, professional, romantic, or academic.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "domain": {"type": "string", "description": "Goal domain: core | social | professional | romantic | academic"},
+                    "items":  {"type": "array",  "items": {"type": "string"}, "description": "List of goal strings."},
+                },
+                "required": ["domain", "items"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "set_current_focus",
+            "description": "Tell Merlin which goal domain to prioritize in ADVISOR mode right now.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "focus": {"type": "string", "description": "Domain name: social, professional, romantic, academic, core."},
+                },
+                "required": ["focus"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "add_goal_note",
+            "description": "Add a persistent context note Merlin always considers (e.g. 'going on a date tonight', 'in job negotiation phase').",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "note": {"type": "string", "description": "Free-form context note."},
+                },
+                "required": ["note"],
             },
         },
     },

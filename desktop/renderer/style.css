@@ -220,3 +220,70 @@ html, body {
 #status-text.connected { color: #00e676; }
 #status-text.disconnected { color: #ff5252; }
 #status-text.connecting { color: #ffab40; }
+
+/* ── ADVISOR teleprompter ───────────────────────────────────────── */
+
+#suggestion-panel {
+  position: fixed;
+  bottom: 52px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  background: rgba(0, 0, 0, 0.72);
+  border: 1px solid rgba(255, 215, 0, 0.4);
+  border-radius: 8px;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  max-width: 70vw;
+  pointer-events: none;
+  transition: opacity 0.5s ease, transform 0.5s ease;
+}
+
+#suggestion-panel.hidden {
+  opacity: 0;
+  transform: translateX(-50%) translateY(10px);
+}
+
+#suggestion-panel.fading {
+  opacity: 0;
+  transition: opacity 1.2s ease;
+}
+
+#suggestion-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #ffd700;
+  box-shadow: 0 0 8px #ffd700;
+  flex-shrink: 0;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.4; transform: scale(0.7); }
+}
+
+#suggestion-text {
+  font-family: var(--hud-font);
+  font-size: 15px;
+  font-weight: normal;
+  letter-spacing: 0.04em;
+  color: #fff9e6;
+  text-shadow: 0 0 12px rgba(255, 215, 0, 0.5);
+  line-height: 1.4;
+  white-space: normal;
+}
+
+/* Dim all other panels when ADVISOR is active */
+body.advisor-active .hud-panel {
+  opacity: 0.3;
+  transition: opacity 0.5s ease;
+}
+body.advisor-active #suggestion-panel {
+  opacity: 1;
+}

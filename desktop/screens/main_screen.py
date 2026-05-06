@@ -7,6 +7,7 @@ from textual.screen import Screen
 from textual.widgets import Header, Footer
 from textual.containers import Horizontal, Vertical
 from textual import work
+from textual.message import Message
 
 from desktop.widgets.left_panel import LeftPanel
 from desktop.widgets.chat_view import ChatView
@@ -32,6 +33,19 @@ except ImportError:
 
 class MainScreen(Screen):
     """Main chat + status TUI screen."""
+
+    class VoiceQuery(Message):
+        """Posted from voice thread to submit a query on the main thread."""
+        def __init__(self, text: str):
+            super().__init__()
+            self.text = text
+
+    class VoiceCommand(Message):
+        """Posted from voice thread to run a local command on the main thread."""
+        def __init__(self, action: str, payload):
+            super().__init__()
+            self.action = action
+            self.payload = payload
 
     BINDINGS = [
         ("ctrl+c", "quit", "Quit"),
@@ -97,6 +111,14 @@ class MainScreen(Screen):
                 cv.add_message("system", "❌ No speech detected. Check mic permissions.")
         except Exception as e:
             cv.add_message("system", f"❌ Mic test error: {e}")
+
+    def on_main_screen_voice_query(self, event: VoiceQuery):
+        """Handle a voice query posted from the voice thread."""
+        asyncio.create_task(self._handle_query(event.text))
+
+    def on_main_screen_voice_command(self, event: VoiceCommand):
+        """Handle a voice command posted from the voice thread."""
+        self._handle_voice_command(event.action, event.payload)
 
     # ── Message handling ──────────────────────
 
@@ -356,7 +378,7 @@ class MainScreen(Screen):
                     cmd = parse_voice_command(text)
                     if cmd:
                         action, payload = cmd
-                        self.app.call_from_thread(self._handle_voice_command, action, payload)
+                        self.post_message(self.VoiceCommand(action, payload))
                         continue
 
                     # Wake word check
@@ -371,11 +393,11 @@ class MainScreen(Screen):
                         if command:
                             cmd2 = parse_voice_command(command)
                             if cmd2:
-                                self.app.call_from_thread(self._handle_voice_command, cmd2[0], cmd2[1])
+                                self.post_message(self.VoiceCommand(cmd2[0], cmd2[1]))
                             else:
-                                self.app.call_from_thread(self._handle_query, command)
+                                self.post_message(self.VoiceQuery(command))
                         else:
-                            self.app.call_from_thread(self._handle_query, "yes?")
+                            self.post_message(self.VoiceQuery("yes?"))
                         self._voice_status = "listening"
             except Exception as e:
                 log.warning("voice loop error: %s", e)
