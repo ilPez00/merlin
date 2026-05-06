@@ -81,3 +81,26 @@ Next planned:
 - Dual-view translate in TALK mode
 
 - Sign: Claude
+
+
+SESSION 5: TUI bugfixes + wake word config (2026-05-06)
+
+Fixes:
+- InputBar crashes: QuerySubmitted/MicPressed now inherit Message
+  with proper super().__init__()
+- Voice loop crash on startup: 1s widget mount delay, try/except
+  around left panel access, graceful skip if widget unavailable
+- Wake word not working: was caused by missing openai-whisper
+  (transcription silently returned empty). Installed.
+- Wake word editable: launch screen now has wake word input field,
+  saved to ~/.merlin/desktop_config.json
+- Webcam optional: START button no longer blocked by missing camera
+- ModeSelector compose fix: yield TabPane directly, no with self:
+
+New/updated files:
+- desktop/screens/launch_screen.py — wake word input, optional webcam
+- desktop/widgets/input_bar.py — Message inheritance
+- desktop/widgets/mode_selector.py — direct TabPane yield
+- desktop/screens/main_screen.py — safe widget access in voice loop
+
+- Sign: Claude
