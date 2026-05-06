@@ -586,6 +586,41 @@ async def add_goal_note(note: str) -> str:
     return set_notes(note)
 
 
+# ── Profile tools ──────────────────────────────────────────────────────────────
+
+async def show_profile() -> str:
+    """Show the user's full skill/strength/weakness profile."""
+    from .profile import load, to_prompt_str
+    return to_prompt_str(load())
+
+
+async def update_strengths(items: list) -> str:
+    """Set the user's strengths list."""
+    from .profile import set_field
+    return set_field("strengths", [str(i) for i in items])
+
+
+async def update_weaknesses(items: list) -> str:
+    """Set the user's weaknesses list."""
+    from .profile import set_field
+    return set_field("weaknesses", [str(i) for i in items])
+
+
+async def update_skills(domain: str, items: list) -> str:
+    """Set skills for a domain: professional, social, physical, or other."""
+    from .profile import set_skill
+    return set_skill(domain, [str(i) for i in items])
+
+
+async def update_profile_field(field: str, value: str) -> str:
+    """Set a profile text field: personality, communication_style, appearance_notes, triggers, notes."""
+    from .profile import set_field, load
+    profile = load()
+    if field in ("triggers",):
+        return set_field(field, [v.strip() for v in value.split(",") if v.strip()])
+    return set_field(field, value)
+
+
 # ── Face recognition tools ────────────────────────────────────────────────────
 
 async def enroll_face(name: str) -> str:
@@ -849,6 +884,11 @@ TOOL_FUNCTIONS = {
     "update_goal":          update_goal,
     "set_current_focus":    set_current_focus,
     "add_goal_note":        add_goal_note,
+    "show_profile":         show_profile,
+    "update_strengths":     update_strengths,
+    "update_weaknesses":    update_weaknesses,
+    "update_skills":        update_skills,
+    "update_profile_field": update_profile_field,
 }
 
 TOOL_DEFINITIONS = [
@@ -1291,6 +1331,72 @@ TOOL_DEFINITIONS = [
                     "note": {"type": "string", "description": "Free-form context note."},
                 },
                 "required": ["note"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "show_profile",
+            "description": "Show the user's full skill, strength, and weakness profile.",
+            "parameters": {"type": "object", "properties": {}, "required": []},
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_strengths",
+            "description": "Set the user's strengths list (replaces existing).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {"type": "array", "items": {"type": "string"}, "description": "List of strengths."},
+                },
+                "required": ["items"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_weaknesses",
+            "description": "Set the user's weaknesses list (replaces existing).",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "items": {"type": "array", "items": {"type": "string"}, "description": "List of weaknesses."},
+                },
+                "required": ["items"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_skills",
+            "description": "Set skills for a domain: professional, social, physical, or other.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "domain": {"type": "string", "description": "Skill domain: professional | social | physical | other"},
+                    "items":  {"type": "array", "items": {"type": "string"}, "description": "List of skills."},
+                },
+                "required": ["domain", "items"],
+            },
+        },
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "update_profile_field",
+            "description": "Set a profile text field: personality, communication_style, appearance_notes, triggers, or notes.",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "field": {"type": "string", "description": "Field name."},
+                    "value": {"type": "string", "description": "Value. For 'triggers', use comma-separated list."},
+                },
+                "required": ["field", "value"],
             },
         },
     },

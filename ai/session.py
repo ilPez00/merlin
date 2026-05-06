@@ -190,14 +190,19 @@ class MerlinSession:
         No tool use. No history mutation. Silent.
         """
         from .advisor import ADVISOR_SYSTEM, build_prompt
-        from .goals import load, to_prompt_str
+        from .goals import load as load_goals, to_prompt_str as goals_str_fn
+        from .profile import load as load_profile, to_prompt_str as profile_str_fn
 
         async with self._lock:
             if not self._history:
                 return None
 
-            goals_str = await asyncio.get_event_loop().run_in_executor(
-                None, lambda: to_prompt_str(load())
+            loop = asyncio.get_event_loop()
+            goals_str = await loop.run_in_executor(
+                None, lambda: goals_str_fn(load_goals())
+            )
+            profile_str = await loop.run_in_executor(
+                None, lambda: profile_str_fn(load_profile())
             )
             # Summarise recent context for the advisor prompt
             recent = self._history[-6:]
@@ -212,7 +217,7 @@ class MerlinSession:
                             context_parts.append(item["text"][:400])
 
             context_str = "\n".join(context_parts)
-            prompt = build_prompt(context_str, goals_str)
+            prompt = build_prompt(context_str, goals_str, profile_str)
 
             try:
                 response = await self._backend.complete(

@@ -492,11 +492,29 @@ class MainScreen(Screen):
 
     def _setup_widget_refresh(self):
         self._widget_timer = asyncio.get_event_loop().call_later(30, self._tick_widgets)
+        self._advisor_timer = asyncio.get_event_loop().call_later(120, self._tick_advisor)
 
     def _tick_widgets(self):
         lp = self.query_one("#left-panel", LeftPanel)
         lp._refresh_widgets()
         self._widget_timer = asyncio.get_event_loop().call_later(30, self._tick_widgets)
+
+    async def _tick_advisor(self):
+        """Run the proactive advisor and schedule next run."""
+        from ai.advisor import advisor
+        try:
+            tip = await advisor.tick()
+            if tip:
+                cv = self.query_one("#chat-view", ChatView)
+                cv.add_message("assistant", f"💡 {tip}")
+                _log_conversation("assistant", f"💡 {tip}")
+                await self._speak(tip)
+        except Exception as e:
+            log.debug("advisor error: %s", e)
+        # Schedule next run
+        self._advisor_timer = asyncio.get_event_loop().call_later(
+            advisor._interval, lambda: asyncio.create_task(self._tick_advisor())
+        )
 
 
     # ── Quit ────────────────────────────────────
